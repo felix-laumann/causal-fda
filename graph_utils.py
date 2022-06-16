@@ -1,15 +1,79 @@
 import numpy as np
 import networkx as nx
+from typing import List, TypeVar
 
+Numeric = TypeVar('Numeric', int, float, complex)
+
+EMPTY_PRODUCT = 1
+EMPTY_SUM = 0
+MINUS_ONE = -1
 
 # UTIL FUNCTIONS TO GENERATE DAGS
-def q_binom(n, q):
-    n_q = 0
-    for _j in range(n-1):
-        for _i in range(_j):
-            n_q += np.power(q, _i)
-    return n_q
+# def q_binom(n, q):
+#     n_q = 0
+#     for _j in range(n-1):
+#         for _i in range(_j):
+#             n_q += np.power(q, _i)
+#     return n_q
 
+def q_poch(a: Numeric, q: Numeric, n: int=None) -> Numeric:
+    """Pure Python q-Pochhammer symbol (a;q)_n is the q-analog of Pochhammer symbol.
+    Also called q-shifted factorial.
+    (a;q)_n = q_poch(a, q, n)
+    (a;q)_infinity = q_poch(a, q)
+    """
+    #Special case of q-binomial thereom.
+    if n is None:
+        sum = EMPTY_SUM
+        for n in range(30):
+            sum += MINUS_ONE**n*q**(n*(n - 1)/2)/q_poch(q, q, n)*a**n
+        return sum
+    if not n:
+        return 1
+    signum_n = 1
+    if n < 0:
+        n = abs(n)
+        signum_n = -1
+    product = EMPTY_PRODUCT
+    if signum_n == 1:
+        for k in range(n):
+            product *= 1 - a*q**k
+    else:
+        for k in range(1, n + 1):
+            product *= 1/(1 - a/q**k)
+    return product
+
+def q_bracket(n: int, q: Numeric) -> Numeric:
+    """Pure Python q_bracket of n [n]_q is the q-analog of n.
+    Also called q-number of n.
+    """
+    if q == 1:
+        return n
+    return (1 - q**n)/(1 - q)
+
+def q_factorial(n: int, q: Numeric, type: int=1) -> Numeric:
+    """Pure Python q_factorial [n]!_q is the q-analog of factorial.
+    type=1 is algorithm (1).
+    type=2 is algorithm (2).
+    """
+    product = EMPTY_PRODUCT
+    if type == 1:
+        for k in range(1, n + 1):
+            product *= q_bracket(k, q)
+        return product
+    elif type == 2:
+        return q_poch(q, q, n)/(1 - q)**n
+
+def q_binom(n: int, k: int, q: Numeric) -> Numeric:
+    """Pure Python q-binomial coefficients [n choose k]_q is the q-analog of (n choose k).
+    Also called Gaussian binomial coefficients, Gaussian coefficients or Gaussian polynomials.
+    """
+    return q_factorial(n, q)/(q_factorial(n - k, q)*q_factorial(k, q))
+
+
+def binom(n: int, k: int) -> int:
+    """Pure Python binomial coefficient (n choose k) using q_binom function."""
+    return int(q_binom(n, k, 1))
 
 def n_DAGs_u(n, u, y):
     """
@@ -29,8 +93,8 @@ def n_DAGs_u(n, u, y):
     a_i = np.zeros(n)
     a_i[-1] = 1
     for i in range(n-1):
-        ni_q = q_binom(n, q) / (q_binom(i, q) * q_binom((n-i), q))
-        a_i[i] = np.power(-1, n-i-1) * ni_q * np.power(1+y, i*(n-i)) * a_i[i-1]
+        #ni_q = q_binom(n, q) / (q_binom(i, q) * q_binom((n-i), q))
+        a_i[i] = np.power(-1, n-i-1) * q_binom(n,i,q) * np.power(1+y, i*(n-i)) * a_i[i-1]
     a_n_u = np.sum(a_i)
     return a_n_u
 
@@ -68,7 +132,7 @@ def n_DAGs(n, y=1):
         a_n_u[u] = n_DAGs_u(n, u, y)
     a_n = np.sum(a_n_u)
 
-    return a_n
+    return int(a_n)
 
 
 # UTIL FUNCTIONS TO GENERATE PARTIALLY DIRECTED GRAPHS
