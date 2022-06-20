@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.fft import rfft, dct
+import pywt
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 
@@ -16,6 +17,16 @@ def dft2(x, y):
 
 def _dct(x, y):
     return np.sum(np.abs(dct(x) - dct(y)))
+
+
+def _dwt(x, y, wavelet):
+    """
+    Manhattan distance between discrete wavelet transforms
+
+    Inputs:
+    wavelet: a built-in wavelet from https://pywavelets.readthedocs.io/en/latest/ref/wavelets.html#built-in-wavelets-wavelist
+    """
+    return np.sum(np.abs(pywt.dwt(x, wavelet)[0] - pywt.dwt(y, wavelet)[0]))
 
 
 def cos_exp_kernel(x, y, n_freqs=5, l=1):
@@ -90,7 +101,6 @@ def K_ID(X, Y=None):
 
     dist_mat = pairwise_distances(X, Y, metric='euclidean')
     gamma = width(X)
-
     K = np.exp(-dist_mat**2/(2*gamma**2))
     return K
 
@@ -118,6 +128,32 @@ def K_dft(X, Y=None):
     gamma = width(X, metric=dft)
 
     K = np.exp(-dist_mat**2/(2*gamma**2))
+    return K
+
+
+def K_dft1(X, Y=None):
+    """
+    Forms the kernel matrix K using the Fourier-exponential kernel with bandwidth gamma
+    equal to the median of distances between the discrete Fourier transforms of the
+    functional samples
+
+    Inputs:
+    X, Y: (n_samples, n_obs) array of observed functional samples from the distribution of X, Y
+
+    Returns:
+    K: matrix formed from the kernel values of all pairs of samples from the two distributions
+    """
+    if Y is None:
+        Y = X
+    if len(X.shape) == 1:
+        X = np.reshape(X, [-1, 1])
+    if len(Y.shape) == 1:
+        Y = np.reshape(Y, [-1, 1])
+
+    dist_mat = pairwise_distances(X, Y, metric=dft)
+    gamma = width(X, metric=dft)
+
+    K = np.exp(-dist_mat/(2*gamma**2))
     return K
 
 
@@ -167,6 +203,34 @@ def K_dct(X, Y=None):
         Y = np.reshape(Y, [-1, 1])
 
     dist_mat = pairwise_distances(X, Y, metric=_dct)
+    gamma = width(X)
+
+    K = np.exp(-dist_mat**2/(2*gamma**2))
+    return K
+
+
+def K_dwt(X, Y=None, wavelet='coif2'):
+    """
+    Forms the kernel matrix K using the Fourier-exponential kernel with bandwidth gamma
+    equal to the median of distances between the discrete cosine transforms of the
+    functional samples
+
+    Inputs:
+    X, Y: (n_samples, n_obs) array of observed functional samples from the distribution of X, Y
+    wavelet: a built-in wavelet from https://pywavelets.readthedocs.io/en/latest/ref/wavelets.html#built-in-wavelets-wavelist,
+             default: 'coif2'
+
+    Returns:
+    K: matrix formed from the kernel values of all pairs of samples from the two distributions
+    """
+    if Y is None:
+        Y = X
+    if len(X.shape) == 1:
+        X = np.reshape(X, [-1, 1])
+    if len(Y.shape) == 1:
+        Y = np.reshape(Y, [-1, 1])
+
+    dist_mat = pairwise_distances(X, Y, metric=_dwt, wavelet=wavelet)
     gamma = width(X)
 
     K = np.exp(-dist_mat**2/(2*gamma**2))

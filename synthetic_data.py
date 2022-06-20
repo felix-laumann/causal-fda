@@ -1,9 +1,11 @@
 import numpy as np
-from scipy.integrate import cumtrapz
+import networkx as nx
+from scipy.integrate import cumulative_trapezoid
 from skfda.representation.basis import Fourier, FDataBasis
 from skfda.representation.grid import FDataGrid
 from skfda.representation.interpolation import SplineInterpolation
-import networkx as nx
+
+from graph_generation import generate_DAGs
 
 
 # define meshes
@@ -47,7 +49,7 @@ def spline_single_sample(X, obs_points, pred_points, int_order, smooth_param):
     return X_fd.evaluate(pred_points)
 
 
-def spline_multi_sample(X, obs_points, pred_points, int_order=1, smooth_param=0):
+def spline_multi_sample(X, obs_points, pred_points, int_order=3, smooth_param=1.5):
     """
     Given multiple samples of functional data X, an array of corresponding observation locations obs_points,
     splines are fit and predictions are given at locations pred_points
@@ -77,10 +79,10 @@ def skfda_basis(n_samples, upper_limit, n_basis, sd):
 # mean function for historically dependent data
 def mean_func(t, mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4):
     if (mll1==0) and (mul1==0) and (mll2==0) and (mul2==0) and (mll3==0) and (mul3==0) and (mll4==0) and (mul4==0):
-        mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4 = 0, 1, 4, 8, 0, 1, 4, 8
+        mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4 = 1, 2, 4, 8, 1, 2, 4, 8
 
     a = np.random.uniform(mll1, mul1)
-    b = np.random.uniform(mll2,mul2)
+    b = np.random.uniform(mll2, mul2)
     c = np.random.uniform(mll3, mul3)
     d = np.random.uniform(mll4, mul4)
     return a*np.sin(b*t) + c*np.cos(d*t)
@@ -121,9 +123,9 @@ def hist_data(X, t, a, pred_points, mean, mll1=0, mul1=0, mll2=0, mul2=0, mll3=0
     Y: (n_samples * n_tests, n_obs) response variable that is historically dependent on X
     """
     if mean:
-        mu = mean_func(pred_points[pred_points <= t], mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4)
+        mu = mean_func(pred_points[pred_points<=t], mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4)
     else:
-        mu = 0  #np.zeros(pred_points.shape)
+        mu = 0
 
     if len(X.shape)==2:
         X_arr = X.reshape(1, X.shape[0], X.shape[1])
@@ -134,9 +136,11 @@ def hist_data(X, t, a, pred_points, mean, mll1=0, mul1=0, mll2=0, mul2=0, mll3=0
         sum_integ = 0
         for p in range(X_arr.shape[0]):  # looping over parent variables
             beta_p = beta(pred_points[pred_points<=t], t, bll1, bul1, bll2, bul2, bll3, bul3, bll4, bul4)
-            integ = cumtrapz(X_arr[p, i, np.arange(0, len(pred_points[pred_points<=t]))] * beta_p,
-                             pred_points[pred_points<=t], initial=0)
+
+            integ = cumulative_trapezoid(X_arr[p, i, np.arange(0, len(pred_points[pred_points<=t]))] * beta_p,
+                                         pred_points[pred_points<=t], initial=0)
             sum_integ += integ
+
         Y[i] = mu + a*sum_integ + epsilon(pred_points[pred_points<=t])
     return Y
 
@@ -162,37 +166,32 @@ def DAG_hist(n_nodes, n_samples, n_obs, n_preds, mean, a, upper_limit, n_basis, 
     dict_edges: dictionary of form key: descendent, value: parents
     X_fd_list: (n_nodes, n_samples, n_preds) array with data according to dependencies specified by edges
     """
-    for _ in range(1000):
-        G = nx.gnp_random_graph(n_nodes, prob, directed=True)
-        DAG = nx.DiGraph([(u, v) for (u, v) in G.edges() if u < v])
-        if len(DAG.nodes()) == n_nodes:
-            break
-        else:
+    DAG = set()
+    DAG_accepted = 0
+    while DAG_accepted < 1:
+        DAG = generate_DAGs(n_nodes, prob, discover=False)[0]
+        if DAG.sources() == DAG.sinks():
             continue
-
-    # creating dictionary of form key: descendent, value: parents
-    dict_edges = {}
-    for node in range(n_nodes):
-        dict_edges[node] = []
-
-    for (u, v) in DAG.edges():
-        dict_edges[v].append(u)
+        else:
+            DAG_accepted += 1
 
     pred_points = np.linspace(0, upper_limit, n_preds).reshape(-1, 1)
     X_fd_list = np.empty((n_nodes, n_samples, n_preds))
 
-    for desc, parents in dict_edges.items():
-        if parents==[]:  # without parents
+    for node in DAG.topological_sort():
+        # first generate data for all nodes that do not have any parents
+        if DAG.parents_of(node) == set():
             obs_points_X_desc = sample_points(n_samples, n_obs)
             X_mat_desc = skfda_basis(n_samples, upper_limit=upper_limit, n_basis=n_basis,
                                      sd=sd).evaluate(obs_points_X_desc, aligned=False).squeeze()
-            X_fd_list[desc] = spline_multi_sample(X_mat_desc, obs_points_X_desc,
+            X_fd_list[node] = spline_multi_sample(X_mat_desc, obs_points_X_desc,
                                                   pred_points).evaluate(pred_points).squeeze()
 
-        else:  # with parents
-            X_fd_list[desc] = hist_data(X_fd_list[parents], upper_limit, a, pred_points, mean)
+        else:
+            # then generate data for all nodes that have parents
+            X_fd_list[node] = hist_data(X_fd_list[list(DAG.parents_of(node))], upper_limit, a, pred_points, mean)
 
-    return dict_edges, X_fd_list
+    return DAG, X_fd_list
 
 
 def generate_data(dep, n_samples, n_trials, n_obs, n_preds, n_vars=1, a=1, a_prime=10, upper_limit=1, n_basis=3, sd=1, prob=0.5,
@@ -204,7 +203,7 @@ def generate_data(dep, n_samples, n_trials, n_obs, n_preds, n_vars=1, a=1, a_pri
     Inputs:
     dep: type of dependencies for synthetic data ('marginal', 'conditional', or 'joint')
     n_samples: number of samples drawn per node
-    n_trials: number of trials to evaluate test power
+    n_trials: number of old_trials to evaluate test power
     n_obs: number of observations per sample
     n_preds: number of equally spaced observation points in [0, 1]
     n_vars: number of nodes in DAG (for joint independence),
@@ -263,6 +262,7 @@ def generate_data(dep, n_samples, n_trials, n_obs, n_preds, n_vars=1, a=1, a_pri
         X_dict = {}
         for trial in range(n_trials):    # generating n_trials different DAGs with data distributed accordingly
             edges_dict[trial], X_dict[trial] = DAG_hist(n_vars, n_samples, n_obs, n_preds, mean, a, upper_limit, n_basis, sd, prob)
+
         return edges_dict, X_dict
 
     else:

@@ -1,10 +1,11 @@
-from graph_utils import n_DAGs, conditions, Meek_init, Meek_rules
+from graph_utils import n_DAGs, conditions, Meek_init, Meek_rules, both_edges, combinations_tuple
+from causaldag import rand
 import numpy as np
-import networkx as nx
+from itertools import product
 from independence import marginal_indep_test, cond_indep_test, opt_lambda
 
 
-def generate_DAGs(n_nodes, y=1, prob=0.5):
+def generate_DAGs(n_nodes, y=1, prob=0.5, discover=True):
     """
     Generate all possible DAGs given number of variables/nodes
 
@@ -12,191 +13,22 @@ def generate_DAGs(n_nodes, y=1, prob=0.5):
     n_nodes: number of variables/nodes in the graph (maximum 6)
     y: free parameter (default: 1)
     prob: probability of edge creation (default: 0.5)
+    discover: (boolean) whether function is used to search over all possible configurations of DAGs or not
 
     Returns:
-    dict_DAGs: dictionary of DAGs where each DAG is another dictionary of form key: descendent, value: parents
+    list_DAGs: list of DAGs where each DAG is another dictionary of form key: descendent, value: parents
     """
     if n_nodes > 6:
         raise ValueError('Not more than six variables supported due to the large number of candidate DAGs.')
 
-    dict_DAGs = {}
-    a_n = n_DAGs(n_nodes, y)
+    if discover is True:
+        a_n = n_DAGs(n_nodes, y)
+    else:
+        a_n = 1
 
-    len_dict_DAGs = 0
-    i = 0
-    while len(dict_DAGs) < a_n:
-        # creating random directed graphs
-        G = nx.fast_gnp_random_graph(n_nodes, prob, seed=i, directed=True)
-        i += 1
-        list_edges = []
-        for (u, v) in G.edges():
-            # removing the edges that result in 2-node loops
-            if (u, v) and (v, u) not in list_edges:
-                list_edges.append((u, v))
-
-        # removing the edges that result in 3-node loops
-        # 3-node graph
-        if (0, 1) and (1, 2) and (2, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (0, 2) in list_edges:
-            pass
-
-        # 4-node graph
-        elif (1, 2) and (2, 3) and (3, 1) in list_edges:
-            pass
-        elif (2, 1) and (3, 2) and (1, 3) in list_edges:
-            pass
-        elif (0, 2) and (2, 3) and (3, 0) in list_edges:
-            pass
-        elif (2, 0) and (3, 2) and (0, 3) in list_edges:
-            pass
-        elif (0, 1) and (1, 3) and (3, 0) in list_edges:
-            pass
-        elif (1, 0) and (3, 1) and (0, 3) in list_edges:
-            pass
-
-        # 5-node graph
-        elif (0, 3) and (3, 4) and (4, 0) in list_edges:
-            pass
-        elif (3, 0) and (4, 3) and (0, 4) in list_edges:
-            pass
-        elif (0, 4) and (4, 2) and (2, 0) in list_edges:
-            pass
-        elif (4, 0) and (2, 4) and (0, 2) in list_edges:
-            pass
-        elif (0, 4) and (4, 1) and (1, 0) in list_edges:
-            pass
-        elif (4, 0) and (1, 4) and (0, 1) in list_edges:
-            pass
-        elif (4, 1) and (1, 3) and (3, 4) in list_edges:
-            pass
-        elif (1, 4) and (3, 1) and (4, 3) in list_edges:
-            pass
-        elif (4, 1) and (1, 2) and (2, 4) in list_edges:
-            pass
-        elif (1, 4) and (2, 1) and (4, 2) in list_edges:
-            pass
-        elif (4, 2) and (2, 3) and (3, 4) in list_edges:
-            pass
-        elif (2, 4) and (3, 2) and (4, 3) in list_edges:
-            pass
-
-        # 6-node graph
-        elif (0, 4) and (4, 5) and (5, 0) in list_edges:
-            pass
-        elif (4, 0) and (5, 4) and (0, 5) in list_edges:
-            pass
-        elif (0, 5) and (5, 3) and (3, 0) in list_edges:
-            pass
-        elif (5, 0) and (3, 5) and (0, 3) in list_edges:
-            pass
-        elif (0, 5) and (5, 2) and (2, 0) in list_edges:
-            pass
-        elif (5, 0) and (2, 5) and (0, 2) in list_edges:
-            pass
-        elif (0, 5) and (5, 1) and (1, 0) in list_edges:
-            pass
-        elif (5, 0) and (1, 5) and (0, 1) in list_edges:
-            pass
-
-        # removing the edges that result in 4-node loops
-        # 4-node graph
-        elif (0, 1) and (1, 2) and (2, 3) and (3, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (3, 2) and (0, 3) in list_edges:
-            pass
-
-        # 5-node graph
-        elif (4, 1) and (1, 2) and (2, 3) and (3, 4) in list_edges:
-            pass
-        elif (1, 4) and (2, 1) and (3, 2) and (4, 3) in list_edges:
-            pass
-        elif (4, 0) and (0, 2) and (2, 3) and (3, 4) in list_edges:
-            pass
-        elif (0, 4) and (2, 0) and (3, 2) and (4, 3) in list_edges:
-            pass
-        elif (4, 0) and (0, 1) and (1, 3) and (3, 4) in list_edges:
-            pass
-        elif (0, 4) and (1, 0) and (3, 1) and (4, 3) in list_edges:
-            pass
-        elif (4, 0) and (0, 1) and (1, 2) and (2, 0) in list_edges:
-            pass
-        elif (0, 4) and (1, 0) and (2, 1) and (0, 2) in list_edges:
-            pass
-
-        # 6-node graph
-        elif (0, 5) and (5, 4) and (4, 1) and (1, 0) in list_edges:
-            pass
-        elif (5, 0) and (4, 5) and (1, 4) and (0, 1) in list_edges:
-            pass
-        elif (5, 2) and (2, 3) and (3, 4) and (4, 5) in list_edges:
-            pass
-        elif (2, 5) and (3, 2) and (4, 3) and (5, 4) in list_edges:
-            pass
-        elif (0, 3) and (3, 4) and (4, 5) and (5, 0) in list_edges:
-            pass
-        elif (3, 0) and (4, 3) and (5, 4) and (0, 5) in list_edges:
-            pass
-        elif (0, 1) and (1, 2) and (2, 5) and (5, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (5, 2) and (0, 5) in list_edges:
-            pass
-        elif (0, 1) and (1, 2) and (2, 3) and (3, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (3, 2) and (0, 3) in list_edges:
-            pass
-        elif (1, 4) and (4, 3) and (3, 2) and (2, 1) in list_edges:
-            pass
-        elif (4, 1) and (3, 4) and (2, 3) and (1, 2) in list_edges:
-            pass
-
-        # removing the edges that result in 5-node loops
-        # 5-node graphs
-        elif (0, 1) and (1, 2) and (2, 3) and (3, 4) and (4, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (3, 2) and (4, 3) and (0, 4) in list_edges:
-            pass
-
-        # 6-node graph
-        elif (5, 1) and (1, 2) and (2, 3) and (3, 4) and (4, 5) in list_edges:
-            pass
-        elif (1, 5) and (2, 1) and (3, 2) and (4, 3) and (5, 4) in list_edges:
-            pass
-        elif (5, 0) and (0, 2) and (2, 3) and (3, 4) and (4, 5) in list_edges:
-            pass
-        elif (0, 5) and (2, 0) and (3, 2) and (4, 3) and (5, 4) in list_edges:
-            pass
-        elif (5, 0) and (0, 1) and (1, 3) and (3, 4) and (4, 5) in list_edges:
-            pass
-        elif (0, 5) and (1, 0) and (3, 1) and (4, 3) and (5, 4) in list_edges:
-            pass
-        elif (5, 0) and (0, 1) and (1, 2) and (2, 4) and (4, 5) in list_edges:
-            pass
-        elif (0, 5) and (1, 0) and (2, 1) and (4, 2) and (5, 4) in list_edges:
-            pass
-        elif (5, 0) and (0, 1) and (1, 2) and (2, 3) and (3, 5) in list_edges:
-            pass
-        elif (0, 5) and (1, 0) and (2, 1) and (3, 2) and (5, 3) in list_edges:
-            pass
-        elif (0, 1) and (1, 2) and (2, 3) and (3, 4) and (4, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (3, 2) and (4, 3) and (0, 4) in list_edges:
-            pass
-
-        # removing the edges that result in 6-node loops
-        # 6-node graphs
-        elif (0, 1) and (1, 2) and (2, 3) and (3, 4) and (4, 5) and (5, 0) in list_edges:
-            pass
-        elif (1, 0) and (2, 1) and (3, 2) and (4, 3) and (5, 4) and (0, 5) in list_edges:
-            pass
-
-        # if no loops are present, accept graph as DAG
-        else:
-            DAG = nx.DiGraph(list_edges)
-            dict_DAGs[len_dict_DAGs] = DAG
-            len_dict_DAGs += 1
-
-    return dict_DAGs
+    # creating random directed graphs
+    DAGs = rand.directed_erdos(n_nodes, prob, size=a_n, as_list=True)
+    return DAGs
 
 
 def generate_DAGs_pd(pd_graph):
@@ -209,18 +41,48 @@ def generate_DAGs_pd(pd_graph):
     Returns:
     dict_DAGs: dictionary of DAGs
     """
-    # build the same function as generate_DAGs but only consider the ones that
-    # can be constructed with partially directed graph pd_graph
 
+    # create list of undirected edges
+    undirect_edges = []
+    for (i, j) in combinations_tuple(range(pd_graph.number_of_nodes()), 2):
+        if both_edges(pd_graph, i, j):
+            undirect_edges.append(tuple((i, j)))
 
+    # create all possible configurations of undirected edges
+    # P stand for parent and D for descendant; P/D is the role of the first entry in each tuple
+    confs = list(product('PD', repeat=len(undirect_edges)))
 
+    # create dictionary of DAGs
+    dict_DAGs = {}
+
+    # have every configuration added to partially directed graph
+    for i, conf in enumerate(confs):
+        remove_edges = []
+        for (node, edge) in zip(conf, undirect_edges):
+            if node == 'P':    # meaning first node of undirected edge in tuple is parent of second node in tuple
+                # remove edge that points from second to first node in pd_graph because first is parent of second note
+                remove_edges.append(tuple((edge[1], edge[0])))
+            elif node == 'D':  # meaning first node of undirected edge in tuple is descendant of second node in tuple
+                # remove edge that points from first to second node in pd_graph because first is descendant of second note
+                remove_edges.append(tuple((edge[0], edge[1])))
+            else:
+                continue
+        G = pd_graph.copy()
+        G.remove_edges_from(remove_edges)
+
+        # graph is represented as dictionary with descendant as key and parents as value
+        dict_DAGs[i] = {}
+        for node in G.nodes():
+            dict_DAGs[i][node] = []
+        for edge in G.edges():
+            dict_DAGs[i][edge[1]].append(edge[0])
 
     return dict_DAGs
 
 
 def partially_direct(sparse_graph):
     """
-    Generate partially directed graph a sparse graph
+    Estimate Markov equivalence class, a collection of partially directed graphs, of the data-generating DAG
 
     Inputs:
     sparse_graph: list of tuples including two nodes that are connected by an edge
@@ -229,15 +91,18 @@ def partially_direct(sparse_graph):
     pd_graph: partially directed graph of form key: descendent, value: parents; if two nodes are both descendants and
               parents of each other it means that the edge is undirected
     """
+    print('Sparse graph', sparse_graph)
     pd_graph_init = Meek_init(sparse_graph)
+    print('Meek init:', pd_graph_init)
     pd_graph = Meek_rules(pd_graph_init)
+    print('Partially directed graph:', pd_graph.edges())
 
     return pd_graph
 
 
-def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
+def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, find_lamb=True):
     """
-    Generate sparsified graph given a number of variables/nodes
+    Generate undirected, sparsified graph given a number of variables/nodes (also called skeleton)
 
     Inputs:
     X_array: (n_nodes, n_samples, n_preds) array with data according to dependencies specified in dictionary edges
@@ -248,6 +113,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
     n_steps: number of MC iterations in the CPT
     alpha: rejection threshold of the test
     make_K: function called to construct the kernel matrix
+    find_lamb: (boolean) whether optimal lambda should be searched for or not; if not, set to value specified in lambs
 
     Returns:
     sparse_graph: sparse graph where edges are undirected but known to be of causal nature; is returned as list where
@@ -261,31 +127,53 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
     rejects = np.zeros(len(edges_conditions))
     p_values = np.zeros(len(edges_conditions))
 
+    sparse_graph = []
+
     # iterate over each entry in list
     i = 0
-    for e_c in edges_conditions:
-        if e_c[2]==():    # perform marginal independence test if conditional set is empty
+    while i < len(edges_conditions):
+
+        e_c = edges_conditions[i]
+
+        if e_c[2] == ():    # perform marginal independence test if conditional set is empty
             rejects[i], p_values[i] = marginal_indep_test(X_array[e_c[0]], X_array[e_c[1]], n_perms, alpha, make_K,
                                                           biased=True)
         else:
-            # find optimal lambda for conditional independence test
-            lamb_opt, rejects_opt = opt_lambda(X_array[e_c[0]], X_array[e_c[1]], X_array[e_c[2]], lambs, n_pretests,
-                                               n_perms, n_steps, alpha, make_K)
-            # perform conditional independence test
-            rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]], X_array[e_c[2]], lamb_opt,
-                                                      alpha, n_perms, n_steps, make_K, pretest=False)
+            if find_lamb:
+                # find optimal lambda for conditional independence test
+                lamb_opt, rejects_opt = opt_lambda(X_array[e_c[0]], X_array[e_c[1]],
+                                                   X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                   lambs, n_pretests, n_perms, n_steps, alpha, make_K)
+                # perform conditional independence test
+                rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                          X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                          lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
+            else:
+                lamb_opt = lambs
+                # perform conditional independence test
+                rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                          X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                          lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
+
+        print(i, e_c, rejects[i])
 
         # skip tuples that include same edge if conditional independence is found
-        r = 1
-        if rejects[i]==0:
-            # continue to next entry in list that does not have the same edge
-            for i_r in range(i, len(edges_conditions)):
-                if (edges_conditions[i][0], edges_conditions[i][1])==(edges_conditions[i_r][0], edges_conditions[i_r][1]):
-                    r+=1
-        i+=r
+        if rejects[i] == 0:
+            r = 0
+            if tuple((e_c[0], e_c[1])) in sparse_graph:
+                sparse_graph.remove(tuple((e_c[0], e_c[1])))
 
-    # only keep entries in edges_conditions that are conditionally dependent
-    sparse_graph = [(i, e) for i, e in enumerate(edges_conditions) if rejects[i]==1]
+            # continue to next entry in list that is not about the same edge
+            for i_r in range(i, len(edges_conditions)):
+                if (e_c[0], e_c[1]) == (edges_conditions[i_r][0], edges_conditions[i_r][1]):
+                    r += 1
+        else:
+            r = 1
+            # only keep entries in sparse_graph that are conditionally dependent
+            if tuple((e_c[0], e_c[1])) not in sparse_graph:
+                sparse_graph.append(tuple((e_c[0], e_c[1])))
+
+        i += r
 
     return sparse_graph
 

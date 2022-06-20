@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.stats import percentileofscore
-from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft2
+from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft1, K_dft2, K_dwt
+
+from tqdm import tqdm
 
 
 # MARGINAL INDEPENDENCE TEST
@@ -115,7 +117,7 @@ def generate_X_CPT_MC(n_steps, log_lik_mat, perm):
         perms = np.random.choice(n, n, replace=False)
         inds_i = perms[0:n_pairs]
         inds_j = perms[n_pairs:(2*n_pairs)]
-        # for each k=1, ..., n_pairs, decide whether to swap perm[inds_i[k]] with Pi[inds_j[k]]
+        # for each k=1, ..., n_pairs, decide whether to swap perm[inds_i[k]] with perm[inds_j[k]]
         log_odds = log_lik_mat[perm[inds_i], inds_j] + log_lik_mat[perm[inds_j], inds_i] - \
                    log_lik_mat[perm[inds_i], inds_i] - log_lik_mat[perm[inds_j], inds_j]
 
@@ -211,7 +213,7 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
         p_values_lamb_list = np.zeros(n_pretests)
 
         i = 0
-        for i in range(n_pretests):
+        for i in tqdm(range(n_pretests)):
             rejects_lamb_list[i], p_values_lamb_list[i] = cond_indep_test(X, Y, Z, lamb, alpha, n_perms, n_steps,
                                                                           make_K, pretest=True)
             if np.sum(rejects_lamb_list) > 2*alpha*n_pretests:
@@ -220,13 +222,13 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
             else:
                 rejects_lamb[lamb] = np.mean(rejects_lamb_list)
                 continue
-        print('...Done. Lambda =', lamb, 'resulted in a rejection rate of {}.'.format(rejects_lamb[lamb]))
+        print('...Done.')
 
     # select lambda which gave percentage of rejections closest to alpha
     lamb_opt, rejects_opt = min(rejects_lamb.items(), key=lambda x: abs(alpha - x[1]))
 
     if rejects_opt > 2*alpha:
-        raise ValueError('Failed to find optimal lambda in the given range. It is recommended to change your range.')
+        raise ValueError('Failed to find optimal lambda in the given range. Change your range of lambdas.')
     else:
         print('Optimal lambda is', lamb_opt, 'and resulted in a rejection rate of {}.'.format(rejects_opt))
 
@@ -277,7 +279,7 @@ def joint_null_dist(k_list, n_samples, n_nodes, n_perms):
             k_perm = k_list[j][index_perm, index_perm[:, None]]
 
             term1 = term1 * k_perm
-            term2 = term2 * np.sum(k_perm) / (n_samples**2)
+            term2 = term2 * np.sum(k_perm) / (n_samples ** 2)
             term3 = term3 * np.sum(k_perm, axis=0) / n_samples
 
         term1_sum = np.sum(term1)
@@ -335,7 +337,7 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
     Z: (n_samples * n_tests, n_obs) array of samples from the third distribution
        (only for conditional independence tests)
     edges_dict: dictionary of form key: descendent, value: parents (only for joint independence test)
-    n_trials: number of trials to compute percentage of rejections over
+    n_trials: number of old_trials to compute percentage of rejections over
     n_perms: number of permutations performed when bootstrapping the null distribution
     alpha: rejection threshold of the test
     make_K: function called to construct the kernel matrix
@@ -364,10 +366,14 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
             make_K = K_ID
         elif K == 'K_dft':
             make_K = K_dft
+        elif K == 'K_dft1':
+            make_K = K_dft1
         elif K == 'K_dft2':
             make_K = K_dft2
         elif K == 'K_dct':
             make_K = K_dct
+        elif K == 'K_dwt':
+            make_K = K_dwt
         elif K == 'K_CEXP':
             make_K = K_CEXP
         else:
@@ -394,10 +400,11 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
 
             rejects[i], p_values[i] = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
                                                       make_K, pretest=False)
-            print('Trial: ', i+1, ' with p-value: ', p_values[i])
+            #print('Trial: ', i+1, ' with p-value: ', p_values[i])
 
         elif test == 'joint':
             edges_dict_i, X_i = edges_dict[i], X[i]
+
             rejects[i], p_values[i] = joint_indep_test(X_i, n_perms, alpha, make_K)
 
         else:
