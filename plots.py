@@ -1,4 +1,3 @@
-import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -42,12 +41,15 @@ def plot_power(type_II_errors, n_samples, a_list, n_tests, test, K_list):
     linestyles = ['dashed', 'solid', 'dashdot']
 
     plt.figure(figsize=(12, 8))
-    plt.xlabel(r'$a$', size=20)
+    if test == 'conditional':
+        plt.xlabel(r"$a'$", size=20)
+    else:
+        plt.xlabel(r'$a$', size=20)
     plt.ylabel(r'Test power', size=20)
     plt.ylim(0, 1.02)
-    plt.xlim(-0.02, 1.02)
-    plt.hlines(y=1, xmin=0, xmax=1, colors='k', linestyles='dotted')
-    plt.hlines(y=0.05, xmin=0, xmax=1, colors='k', linestyles='dotted')
+    plt.xlim(np.min(a_list)-0.02, np.max(a_list)+0.02)
+    plt.hlines(y=1, xmin=np.min(a_list), xmax=np.max(a_list), colors='k', linestyles='dotted')
+    plt.hlines(y=0.05, xmin=np.min(a_list), xmax=np.max(a_list), colors='k', linestyles='dotted')
     if test=='marginal':
         title = 'Marginal'
     elif test=='conditional':

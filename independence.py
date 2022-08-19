@@ -1,8 +1,15 @@
 import numpy as np
 from scipy.stats import percentileofscore
 from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft1, K_dft2, K_dwt
+from numba import njit, guvectorize, types
+from tqdm.notebook import tqdm
+from multiprocessing import cpu_count, get_context
 
-from tqdm import tqdm
+
+# UTILS
+def reshape(array, d):
+    for x in array:
+        yield x.reshape(-1, d)
 
 
 # MARGINAL INDEPENDENCE TEST
@@ -128,23 +135,40 @@ def generate_X_CPT_MC(n_steps, log_lik_mat, perm):
     return perm
 
 
+@njit
 def HSCIC(k_X, k_Y, k_Z, W):
-    first = k_Z.T @ W @ np.multiply(k_X, k_Y) @ W @ k_Z
-    second = k_Z.T @ W @ np.multiply(k_X @ W @ k_Z, k_Y @ W @ k_Z)
-    third = (k_Z.T @ W @ k_X @ W @ k_Z) * (k_Z.T @ W @ k_Y @ W @ k_Z)
-    return (first - 2*second + third)[0, 0]
+    term1 = k_Z.T @ W
+    term2 = W @ k_Z
+    x_term2 = k_X @ term2
+    y_term2 = k_Y @ term2
+    first = term1 @ np.multiply(k_X, k_Y) @ term2
+    second = term1 @ np.multiply(x_term2, y_term2)
+    third = (term1 @ x_term2) * (term1 @ y_term2)
+    return (first - 2 * second + third)[0, 0]
 
 
-def cond_null_dist(X_CPT, k_Y, Z, W, make_K, n_perms, d):
+def cond_null_dist_perm(perm_X_CPT, k_Y, k_Zs, W, make_K):
+    k_X_CPT = make_K(perm_X_CPT)
+    return np.sum([HSCIC(k_X_CPT, k_Y, k_Z, W) for k_Z in k_Zs])
+
+
+def cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
     """
     Approximates the null distribution
     """
-    HSCIC_arr = np.zeros(n_perms)
-    for perm in range(n_perms):
-        k_X_CPT = make_K(X_CPT[perm].reshape(-1, d))
-        HSCIC_arr[perm] = np.sum([HSCIC(k_X_CPT, k_Y, make_K(Z, z.reshape(-1, d)), W) for z in Z])
+    n_nodes, n_samples, d = Z_arr.shape
 
-    return np.sort(HSCIC_arr)
+    Z = np.zeros((n_samples, n_nodes * d))
+    for node in range(n_nodes):
+        Z[:, node * d:(node + 1) * d] = Z_arr[node]
+
+    k_Zs = [make_K(Z, reshaped_z) for z, reshaped_z in zip(Z, reshape(Z, n_nodes * d))]
+
+    with get_context('spawn').Pool(cpu_count()) as pool:
+        jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
+                for x_CPT in reshape(X_CPT[:n_perms], d)]
+
+        return np.sort([job.get() for job in list(jobs)])
 
 
 def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest):
@@ -183,15 +207,14 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
         # permute once to compute test statistic
         k_X_CPT = make_K(X_CPT[np.random.randint(0, n_perms)].reshape(-1, d))
         for z in Z:
-            k_Z = make_K(Z, z.reshape(-1, d))
+            k_Z = make_K(Z, z.reshape(-1, n_nodes * d))
             statistic += HSCIC(k_X_CPT, k_Y, k_Z, W)
-
     else:
         for z in Z:
-            k_Z = make_K(Z, z.reshape(-1, d))
+            k_Z = make_K(Z, z.reshape(-1, n_nodes * d))
             statistic += HSCIC(k_X, k_Y, k_Z, W)
 
-    statistics_sort = cond_null_dist(X_CPT, k_Y, Z, W, make_K, n_perms, d)
+    statistics_sort = cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms)
 
     # compute p-value
     p_value = 1 - (percentileofscore(statistics_sort, statistic)/100)
@@ -212,7 +235,6 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
         rejects_lamb_list = np.zeros(n_pretests)
         p_values_lamb_list = np.zeros(n_pretests)
 
-        i = 0
         for i in tqdm(range(n_pretests)):
             rejects_lamb_list[i], p_values_lamb_list[i] = cond_indep_test(X, Y, Z, lamb, alpha, n_perms, n_steps,
                                                                           make_K, pretest=True)
@@ -222,7 +244,7 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
             else:
                 rejects_lamb[lamb] = np.mean(rejects_lamb_list)
                 continue
-        print('...Done.')
+        print('...Completed with a rejection rate of {}.'.format(rejects_lamb[lamb]))
 
     # select lambda which gave percentage of rejections closest to alpha
     lamb_opt, rejects_opt = min(rejects_lamb.items(), key=lambda x: abs(alpha - x[1]))
@@ -361,29 +383,28 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
     rejects = np.zeros(n_trials)
     p_values = np.zeros(n_trials)
 
-    for i in range(n_trials):
-        if K == 'K_ID':
-            make_K = K_ID
-        elif K == 'K_dft':
-            make_K = K_dft
-        elif K == 'K_dft1':
-            make_K = K_dft1
-        elif K == 'K_dft2':
-            make_K = K_dft2
-        elif K == 'K_dct':
-            make_K = K_dct
-        elif K == 'K_dwt':
-            make_K = K_dwt
-        elif K == 'K_CEXP':
-            make_K = K_CEXP
-        else:
-            raise ValueError('Kernel not implemented')
+    if K == 'K_ID':
+        make_K = K_ID
+    elif K == 'K_dft':
+        make_K = K_dft
+    elif K == 'K_dft1':
+        make_K = K_dft1
+    elif K == 'K_dft2':
+        make_K = K_dft2
+    elif K == 'K_dct':
+        make_K = K_dct
+    elif K == 'K_dwt':
+        make_K = K_dwt
+    elif K == 'K_CEXP':
+        make_K = K_CEXP
+    else:
+        raise ValueError('Kernel not implemented')
 
+    for i in tqdm(range(n_trials)):
         if test == 'marginal':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
             rejects[i], p_values[i] = marginal_indep_test(X_i, Y_i, n_perms, alpha, make_K, biased)
-
         elif test == 'conditional':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
@@ -400,7 +421,6 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
 
             rejects[i], p_values[i] = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
                                                       make_K, pretest=False)
-            #print('Trial: ', i+1, ' with p-value: ', p_values[i])
 
         elif test == 'joint':
             edges_dict_i, X_i = edges_dict[i], X[i]

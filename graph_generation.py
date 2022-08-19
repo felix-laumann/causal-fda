@@ -5,7 +5,7 @@ from itertools import product
 from independence import marginal_indep_test, cond_indep_test, opt_lambda
 
 
-def generate_DAGs(n_nodes, y=1, prob=0.5, discover=True):
+def generate_DAGs(n_nodes, prob=0.5, discover=True):
     """
     Generate all possible DAGs given number of variables/nodes
 
@@ -22,13 +22,29 @@ def generate_DAGs(n_nodes, y=1, prob=0.5, discover=True):
         raise ValueError('Not more than six variables supported due to the large number of candidate DAGs.')
 
     if discover is True:
-        a_n = n_DAGs(n_nodes, y)
+        a_n = n_DAGs(n_nodes)
     else:
         a_n = 1
 
     # creating random directed graphs
-    DAGs = rand.directed_erdos(n_nodes, prob, size=a_n, as_list=True)
-    return DAGs
+    Gs = []
+    while len(Gs) < a_n:
+        G = rand.directed_erdos(n_nodes, density=prob, size=1, as_list=True)
+        if G[0] not in Gs:
+            Gs.extend(G)
+
+    if discover is True:
+        # represent as dictionary
+        dict_DAGs = {}
+        for i, G in enumerate(Gs):
+            dict_DAGs[i] = {}
+            for node in G.to_nx().nodes():
+                dict_DAGs[i][node] = []
+            for edge in G.to_nx().edges():
+                dict_DAGs[i][edge[1]].append(edge[0])
+        return dict_DAGs
+    else:
+        return Gs
 
 
 def generate_DAGs_pd(pd_graph):
@@ -91,11 +107,11 @@ def partially_direct(sparse_graph):
     pd_graph: partially directed graph of form key: descendent, value: parents; if two nodes are both descendants and
               parents of each other it means that the edge is undirected
     """
-    print('Sparse graph', sparse_graph)
+    #print('Sparse graph', sparse_graph)
     pd_graph_init = Meek_init(sparse_graph)
-    print('Meek init:', pd_graph_init)
+    #print('Meek init:', pd_graph_init)
     pd_graph = Meek_rules(pd_graph_init)
-    print('Partially directed graph:', pd_graph.edges())
+    print('Partially directed graph (CPDAG):', pd_graph.edges())
 
     return pd_graph
 
@@ -155,7 +171,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                                                           X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
                                                           lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
 
-        print(i, e_c, rejects[i])
+        #print(i, e_c, rejects[i], p_values[i])
 
         # skip tuples that include same edge if conditional independence is found
         if rejects[i] == 0:

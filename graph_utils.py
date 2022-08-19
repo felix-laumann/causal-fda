@@ -3,81 +3,33 @@ import networkx as nx
 
 
 # UTIL FUNCTIONS TO GENERATE DAGS
-def q_factorial(n, q):
-    n_q = 1
-    for _j in np.arange(1, n):
-        n_q_p = 0
-        for _i in np.arange(0, _j+1):
-            n_q_p += np.power(q, _i)
-
-        n_q *= n_q_p
-    return n_q
-
-
-def n_DAGs_u(n, u, y):
-    """
-    Computation of the number of DAGs with u descents for a given number of n nodes,
-    according to Archer et al. (2020), equation 23 (https://arxiv.org/pdf/1909.01550.pdf)
-
-    Inputs:
-    n: number of nodes
-    u: number of descents
-    y: free parameter (default: 1)
-
-    Returns:
-    a_n_u: number of DAGs with u descents
-    """
-    q = (1+u*y)/(1+y)
-
-    a_i_sum = np.zeros(n)
-    a_i_sum[-1] = 1
-    for i in np.arange(0, n):
-        # compute q-binomial coefficients
-        ni_q = q_factorial(n, q) / (q_factorial(i, q) * q_factorial((n-i), q))
-        a_i_sum[i] = np.power(-1, n-i-1) * ni_q * np.power(1+y, i*(n-i)) # TBC
-    print(a_i_sum)
-    return np.sum(a_i_sum)
-
-
-def n_DAGs(n, y):
+def n_DAGs(n):
     """
     Computation of the number of DAGs over all descents for a given number of n nodes,
     according to Archer et al. (2020), Corollary 11 (https://arxiv.org/pdf/1909.01550.pdf)
 
     Inputs:
     n: number of nodes (maximum 6)
-    y: free parameter (default: 1)
 
     Returns:
     a_n: total number of DAGs
     """
     if n==1:
-        u_range = range(1)
         a_n = 1
     elif n==2:
-        u_range = range(2)
         a_n = 3
     elif n==3:
-        u_range = range(4)
         a_n = 25
     elif n==4:
-        u_range = range(7)
         a_n = 543
     elif n==5:
-        u_range = range(11)
         a_n = 29281
     elif n==6:
-        u_range = range(16)
         a_n = 3781503
     else:
         raise ValueError('Generating DAGs with more than 6 nodes is not implemented due to computational reasons. '
-                         'We recommend to partially direct your graph first')
-    """
-    a_n_u = np.zeros(max(u_range)+1)
-    for u in u_range:
-        a_n_u[u] = n_DAGs_u(n, u, y)
-    a_n = np.sum(a_n_u)
-    """
+                         'We recommend to partially direct your graph first.')
+
     return a_n
 
 

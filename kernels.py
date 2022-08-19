@@ -62,13 +62,12 @@ def CEXP(X, n_freqs=20, l=10):
     """
     n_obs = X.shape[1]
     obs_grid = np.linspace(0, 1, n_obs)
-    T_mat = pairwise_kernels(obs_grid.reshape(-1,1), metric=cos_exp_kernel, n_freqs=n_freqs, l=l)
-    cos_exp_X = (1./n_obs) * np.dot(X,T_mat)
+    T_mat = pairwise_kernels(obs_grid.reshape(-1, 1), metric=cos_exp_kernel, n_freqs=n_freqs, l=l)
+    cos_exp_X = (1./n_obs) * np.dot(X, T_mat)
     return cos_exp_X
 
 
 # median heuristic for kernel width
-#@njit
 def width(X, Y=None, metric='euclidean'):
     """
     Computes the median heuristic for the kernel bandwidth
