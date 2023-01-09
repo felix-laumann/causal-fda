@@ -1,3 +1,4 @@
+import numpy as np
 from skfda.ml.regression import HistoricalLinearRegression, KNeighborsRegressor
 from skfda import FDataGrid
 from sklearn.metrics import r2_score
@@ -18,19 +19,21 @@ def hist_linear(n_intervals, ind_var, dep_var, pred_points, analyse):
     Returns:
     dep_var_hat: prediction of dep_var regressed on ind_var
     """
+    upper_limit = np.max(pred_points)
     hist = HistoricalLinearRegression(n_intervals=n_intervals)
-    _ = hist.fit(FDataGrid(ind_var).to_grid(grid_points=pred_points), FDataGrid(dep_var).to_grid(grid_points=pred_points))
-    dep_var_hat = hist.predict(FDataGrid(ind_var).to_grid(grid_points=pred_points)).evaluate(pred_points).squeeze()
+    _ = hist.fit(FDataGrid(ind_var, domain_range=(0, upper_limit)).to_grid(grid_points=pred_points),
+                 FDataGrid(dep_var, domain_range=(0, upper_limit)).to_grid(grid_points=pred_points))
+    dep_var_hat = hist.predict(FDataGrid(ind_var, domain_range=(0, upper_limit)).to_grid(grid_points=pred_points)).evaluate(pred_points).squeeze()
 
     if analyse is True:
-        R_squared = r2_score(FDataGrid(dep_var).to_grid(grid_points=pred_points).evaluate(pred_points).squeeze(),
+        R_squared = r2_score(FDataGrid(dep_var, domain_range=(0, upper_limit)).to_grid(grid_points=pred_points).evaluate(pred_points).squeeze(),
                              dep_var_hat)
         print('R-squared:', R_squared)
 
     return dep_var_hat
 
 
-def knn_regressor(n_neighbors, weights, regressor, alg, metric, ind_var, dep_var, pred_points, analyse):
+def knn_regressor(n_neighbors, ind_var, dep_var, pred_points, analyse, weights='uniform', regressor='mean', alg='auto', metric='l2_distance'):
     """
     kNN regression model that regressed dependent variable (dep_var) on independent variable (ind_var)
 

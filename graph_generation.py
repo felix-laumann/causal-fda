@@ -16,9 +16,9 @@ def generate_DAGs(n_nodes, prob=0.5, discover=True):
     discover: (boolean) whether function is used to search over all possible configurations of DAGs or not
 
     Returns:
-    list_DAGs: list of DAGs where each DAG is another dictionary of form key: descendent, value: parents
+    dict_DAGs or Gs: list of DAGs where each DAG is another dictionary of form key: descendent, value: parents
     """
-    if n_nodes > 6:
+    if discover is True and n_nodes > 6:
         raise ValueError('Not more than six variables supported due to the large number of candidate DAGs.')
 
     if discover is True:
@@ -96,7 +96,7 @@ def generate_DAGs_pd(pd_graph):
     return dict_DAGs
 
 
-def partially_direct(sparse_graph):
+def partially_direct(sparse_graph, analyse):
     """
     Estimate Markov equivalence class, a collection of partially directed graphs, of the data-generating DAG
 
@@ -107,29 +107,34 @@ def partially_direct(sparse_graph):
     pd_graph: partially directed graph of form key: descendent, value: parents; if two nodes are both descendants and
               parents of each other it means that the edge is undirected
     """
-    #print('Sparse graph', sparse_graph)
     pd_graph_init = Meek_init(sparse_graph)
-    #print('Meek init:', pd_graph_init)
     pd_graph = Meek_rules(pd_graph_init)
-    print('Partially directed graph (CPDAG):', pd_graph.edges())
+    if analyse:
+        print('Sparse graph', sparse_graph)
+        print('Meek init:', pd_graph_init)
+        print('Partially directed graph (CPDAG):', pd_graph.edges())
 
-    return pd_graph
+    # convert output to dictionary
+    dict_DAG = {}
+    for node in pd_graph.nodes():
+        dict_DAG[node] = []
+    for edge in pd_graph.edges():
+        dict_DAG[edge[1]].append(edge[0])
+    return dict_DAG
 
 
-def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, find_lamb=True):
+def sparsify_graph(X_array, lamb_opt, n_perms, n_steps, alpha, make_K):
     """
     Generate undirected, sparsified graph given a number of variables/nodes (also called skeleton)
 
     Inputs:
     X_array: (n_nodes, n_samples, n_preds) array with data according to dependencies specified in dictionary edges
-    lambs: range to iterate over for optimal value for regularisation of kernel ridge regression to compute HSCIC
+    lamb_opt: optimal value for regularisation of kernel ridge regression to compute HSCIC based on pre-tests
            (only for conditional independence test)
-    n_pretests: number of tests to find optimal value for lambda
     n_perms: number of permutations performed when bootstrapping the null distribution
     n_steps: number of MC iterations in the CPT
     alpha: rejection threshold of the test
     make_K: function called to construct the kernel matrix
-    find_lamb: (boolean) whether optimal lambda should be searched for or not; if not, set to value specified in lambs
 
     Returns:
     sparse_graph: sparse graph where edges are undirected but known to be of causal nature; is returned as list where
@@ -155,23 +160,10 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
             rejects[i], p_values[i] = marginal_indep_test(X_array[e_c[0]], X_array[e_c[1]], n_perms, alpha, make_K,
                                                           biased=True)
         else:
-            if find_lamb:
-                # find optimal lambda for conditional independence test
-                lamb_opt, rejects_opt = opt_lambda(X_array[e_c[0]], X_array[e_c[1]],
-                                                   X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
-                                                   lambs, n_pretests, n_perms, n_steps, alpha, make_K)
-                # perform conditional independence test
-                rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
-                                                          X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
-                                                          lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
-            else:
-                lamb_opt = lambs
-                # perform conditional independence test
-                rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
-                                                          X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
-                                                          lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
-
-        #print(i, e_c, rejects[i], p_values[i])
+            # perform conditional independence test
+            rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                      X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                      lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
 
         # skip tuples that include same edge if conditional independence is found
         if rejects[i] == 0:

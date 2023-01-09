@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import percentileofscore
 from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft1, K_dft2, K_dwt
-from numba import njit, guvectorize, types
+from numba import njit
 from tqdm.notebook import tqdm
 from multiprocessing import cpu_count, get_context
 
@@ -168,7 +168,7 @@ def cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
         jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
                 for x_CPT in reshape(X_CPT[:n_perms], d)]
 
-        return np.sort([job.get() for job in list(jobs)])
+        return np.sort([job.get() for job in jobs])
 
 
 def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest):
@@ -177,11 +177,11 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
         Y = Y.reshape(-1, 1)
         Z_arr = Z_arr.reshape(-1, 1)
 
-    n_nodes, n_samples, d = Z_arr.shape
+    n_nodes, n_samples, n_obs = Z_arr.shape
 
-    Z = np.zeros((n_samples, n_nodes*d))
+    Z = np.zeros((n_samples, n_nodes*n_obs))
     for node in range(n_nodes):
-        Z[:, node*d:(node+1)*d] = Z_arr[node]
+        Z[:, node*n_obs:(node+1)*n_obs] = Z_arr[node]
 
     # test statistic
     statistic = 0
@@ -205,13 +205,13 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
 
     if pretest is True:
         # permute once to compute test statistic
-        k_X_CPT = make_K(X_CPT[np.random.randint(0, n_perms)].reshape(-1, d))
+        k_X_CPT = make_K(X_CPT[np.random.randint(0, n_perms)].reshape(-1, n_obs))
         for z in Z:
-            k_Z = make_K(Z, z.reshape(-1, n_nodes * d))
+            k_Z = make_K(Z, z.reshape(-1, n_nodes * n_obs))
             statistic += HSCIC(k_X_CPT, k_Y, k_Z, W)
     else:
         for z in Z:
-            k_Z = make_K(Z, z.reshape(-1, n_nodes * d))
+            k_Z = make_K(Z, z.reshape(-1, n_nodes * n_obs))
             statistic += HSCIC(k_X, k_Y, k_Z, W)
 
     statistics_sort = cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms)
@@ -226,7 +226,27 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
     return reject, p_value
 
 
-def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
+def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, K):
+    """
+    Function to find optimal lambda value
+
+    Inputs:
+    lambs: range to iterate over for optimal value for regularisation of kernel ridge regression to compute HSCIC
+    n_pretests: number of tests to find optimal value for lambda  (only for conditional independence test)
+    K: the kernel function to use
+
+    Returns:
+    lamb_opt: optimal lambda value
+    rejects_opt: number of rejections out of n_pretests with lamb_opt
+    """
+
+    if K == 'K_ID':
+        make_K = K_ID
+    elif K == K_ID:
+        make_K = K_ID
+    else:
+        raise ValueError('Only K_ID is supported currently.')
+
     rejects_lamb = {}
     # find optimal lambda
     print('Finding optimal lambda:')
@@ -247,7 +267,8 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, make_K):
         print('...Completed with a rejection rate of {}.'.format(rejects_lamb[lamb]))
 
     # select lambda which gave percentage of rejections closest to alpha
-    lamb_opt, rejects_opt = min(rejects_lamb.items(), key=lambda x: abs(alpha - x[1]))
+    rejects_opt = min(rejects_lamb.values(), key=lambda x: abs(alpha - x))
+    lamb_opt = lambs[[i for i, rej in enumerate(rejects_lamb.values()) if rej == rejects_opt][-1]]
 
     if rejects_opt > 2*alpha:
         raise ValueError('Failed to find optimal lambda in the given range. Change your range of lambdas.')
@@ -347,7 +368,7 @@ def joint_indep_test(X_array, n_perms, alpha, make_K):
 
 # TEST POWER
 def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, alpha=0.05, K='K_ID', test='marginal',
-               lambs=np.linspace(0, 1, 4), n_steps=50, n_pretests=100, biased=True):
+               lamb_opt=1e-4, n_steps=50, biased=True):
     """
     Computes the test power by conducting multiple independence tests in parallel
     and returning the percentage of null hypothesis rejections
@@ -364,10 +385,9 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
     alpha: rejection threshold of the test
     make_K: function called to construct the kernel matrix
     test: (str) which test to perform ('marginal', 'conditional', or 'joint')
-    lambs: range to iterate over for optimal value for regularisation of kernel ridge regression to compute HSCIC
+    lamb_opt: range to iterate over for optimal value for regularisation of kernel ridge regression to compute HSCIC
            (only for conditional independence test)
     n_steps: number of MC iterations in the CPT (only for conditional independence test)
-    n_pretests: number of tests to find optimal value for lambda  (only for conditional independence test)
     biased: Boolean parameter to determine whether to compute the biased or unbiased estimator of HSIC
             (only for marginal independence test)
 
@@ -411,13 +431,12 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
             Z_i = Z[:, i * n_samples:(i + 1) * n_samples]
 
             if i == 0:
-                if type(lambs) == float:
-                    lamb_opt = lambs
-                elif len(lambs) == 1:
-                    lamb_opt = lambs[0]
+                if type(lamb_opt) == float:
+                    pass
+                elif len(lamb_opt) == 1:
+                    lamb_opt = lamb_opt[0]
                 else:
-                    # find optimal lambda
-                    lamb_opt, rejects_opt = opt_lambda(X_i, Y_i, Z_i, lambs, n_pretests, n_perms, n_steps, alpha, make_K)
+                    raise ValueError('Lambda must be a number.')
 
             rejects[i], p_values[i] = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
                                                       make_K, pretest=False)
@@ -432,4 +451,5 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
 
     # compute percentage of rejections
     power = np.mean(rejects)
+
     return power
