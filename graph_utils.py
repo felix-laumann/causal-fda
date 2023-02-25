@@ -27,7 +27,7 @@ def n_DAGs(n):
     elif n==6:
         a_n = 3781503
     else:
-        raise ValueError('Generating DAGs with more than 6 nodes is not implemented due to computational reasons. '
+        raise ValueError('Generating DAGs with more than six nodes is not implemented due to computational reasons. '
                          'We recommend to partially direct your graph first.')
 
     return a_n

@@ -2,6 +2,7 @@ from graph_utils import n_DAGs, conditions, Meek_init, Meek_rules, both_edges, c
 from causaldag import rand
 import numpy as np
 from itertools import product
+import networkx as nx
 from independence import marginal_indep_test, cond_indep_test, opt_lambda
 
 
@@ -57,11 +58,13 @@ def generate_DAGs_pd(pd_graph):
     Returns:
     dict_DAGs: dictionary of DAGs
     """
+    # convert dictionary into networkx MultiDiGraph
+    pdgraph = nx.MultiDiGraph(pd_graph)
 
     # create list of undirected edges
     undirect_edges = []
-    for (i, j) in combinations_tuple(range(pd_graph.number_of_nodes()), 2):
-        if both_edges(pd_graph, i, j):
+    for (i, j) in combinations_tuple(range(pdgraph.number_of_nodes()), 2):
+        if both_edges(pdgraph, i, j):
             undirect_edges.append(tuple((i, j)))
 
     # create all possible configurations of undirected edges
@@ -83,7 +86,7 @@ def generate_DAGs_pd(pd_graph):
                 remove_edges.append(tuple((edge[0], edge[1])))
             else:
                 continue
-        G = pd_graph.copy()
+        G = pdgraph.copy()
         G.remove_edges_from(remove_edges)
 
         # graph is represented as dictionary with descendant as key and parents as value
@@ -123,22 +126,28 @@ def partially_direct(sparse_graph, analyse):
     return dict_DAG
 
 
-def sparsify_graph(X_array, lamb_opt, n_perms, n_steps, alpha, make_K):
+def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, l_cond, r_opts):
     """
     Generate undirected, sparsified graph given a number of variables/nodes (also called skeleton)
 
     Inputs:
     X_array: (n_nodes, n_samples, n_preds) array with data according to dependencies specified in dictionary edges
-    lamb_opt: optimal value for regularisation of kernel ridge regression to compute HSCIC based on pre-tests
+    lambs: range of optimal value for regularisation of kernel ridge regression to compute HSCIC based on pre-tests
            (only for conditional independence test)
+    n_pretests: number of pretests to find optimal lambda value
     n_perms: number of permutations performed when bootstrapping the null distribution
     n_steps: number of MC iterations in the CPT
     alpha: rejection threshold of the test
     make_K: function called to construct the kernel matrix
+    lamb_cond: array of optimal lambda values for each size of conditional sets
+    rejects_opt: number of rejections with optimal lambda
+    i: trial number
 
     Returns:
     sparse_graph: sparse graph where edges are undirected but known to be of causal nature; is returned as list where
                   entries are tuples of two nodes that are connected by an edge
+    lamb_cond: array of optimal lambda values for each size of conditional sets
+    rejects_opts: rejection rate with optimal lambda
     """
     n_nodes, n_samples, n_preds = X_array.shape
 
@@ -151,29 +160,54 @@ def sparsify_graph(X_array, lamb_opt, n_perms, n_steps, alpha, make_K):
     sparse_graph = []
 
     # iterate over each entry in list
-    i = 0
-    while i < len(edges_conditions):
+    j = 0
+    while j < len(edges_conditions):
+        e_c = edges_conditions[j]
 
-        e_c = edges_conditions[i]
-
-        if e_c[2] == ():    # perform marginal independence test if conditional set is empty
-            rejects[i], p_values[i] = marginal_indep_test(X_array[e_c[0]], X_array[e_c[1]], n_perms, alpha, make_K,
+        if len(e_c[2]) == 0:    # perform marginal independence test if conditional set is empty
+            lamb_cond = np.zeros(n_nodes - 2)
+            rejects_opts = np.zeros(n_nodes - 2)
+            rejects[j], p_values[j] = marginal_indep_test(X_array[e_c[0]], X_array[e_c[1]], n_perms, alpha, make_K,
                                                           biased=True)
         else:
-            # perform conditional independence test
-            rejects[i], p_values[i] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
-                                                      X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
-                                                      lamb_opt, alpha, n_perms, n_steps, make_K, pretest=False)
+            if type(lambs) == float:
+                l = len(e_c[2])
+                lamb_cond = np.zeros(n_nodes - 2)
+                rejects_opts = np.zeros(n_nodes - 2)
+                lamb_cond[:] = lambs
+                # perform conditional independence test
+                rejects[j], p_values[j] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                          X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                          lamb_cond[l - 1], alpha, n_perms, n_steps, make_K, pretest=False)
+
+            else:
+                l = len(e_c[2])
+                if l_cond[l-1] == 0:
+                    # find optimal lambda for conditional set of size 1
+                    l_cond[l-1], r_opts[l-1] = opt_lambda(X_array[e_c[0]], X_array[e_c[1]], X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                                   lambs, n_pretests, n_perms, n_steps, alpha, K='K_ID')
+                    # perform conditional independence test
+                    rejects[j], p_values[j] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                              X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                              l_cond[l-1], alpha, n_perms, n_steps, make_K, pretest=False)
+                else:
+                    # perform conditional independence test
+                    rejects[j], p_values[j] = cond_indep_test(X_array[e_c[0]], X_array[e_c[1]],
+                                                              X_array[list(e_c[2])].reshape(len(list(e_c[2])), n_samples, n_preds),
+                                                              l_cond[l-1], alpha, n_perms, n_steps, make_K, pretest=False)
+
+        lamb_cond = l_cond
+        rejects_opts = r_opts
 
         # skip tuples that include same edge if conditional independence is found
-        if rejects[i] == 0:
+        if rejects[j] == 0:
             r = 0
             if tuple((e_c[0], e_c[1])) in sparse_graph:
                 sparse_graph.remove(tuple((e_c[0], e_c[1])))
 
             # continue to next entry in list that is not about the same edge
-            for i_r in range(i, len(edges_conditions)):
-                if (e_c[0], e_c[1]) == (edges_conditions[i_r][0], edges_conditions[i_r][1]):
+            for j_r in range(j, len(edges_conditions)):
+                if (e_c[0], e_c[1]) == (edges_conditions[j_r][0], edges_conditions[j_r][1]):
                     r += 1
         else:
             r = 1
@@ -181,7 +215,7 @@ def sparsify_graph(X_array, lamb_opt, n_perms, n_steps, alpha, make_K):
             if tuple((e_c[0], e_c[1])) not in sparse_graph:
                 sparse_graph.append(tuple((e_c[0], e_c[1])))
 
-        i += r
+        j += r
 
-    return sparse_graph
+    return sparse_graph, lamb_cond, rejects_opts
 

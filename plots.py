@@ -107,7 +107,7 @@ def plot_power(type_II_errors, n_samples, a_list, n_trials, test, periods, n_var
     plt.tight_layout()
 
     if test=='conditional':
-        plt.savefig('results/{}/test_power_{}_{}.png'.format(test, test, n_vars), format='png')
+        plt.savefig('{}/test_power_{}_{}.png'.format(test, test, n_vars), format='png')
     else:
         plt.savefig('results/{}/test_power_{}.png'.format(test, test), format='png')
     return plt.show()
