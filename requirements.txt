@@ -1,0 +1,12 @@
+numpy
+tqdm
+networkx
+scipy
+jupyter
+causaldag
+pywavelets
+sklearn
+matplotlib
+scikit-fda
+numba
+numba-scipy
