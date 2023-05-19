@@ -14,5 +14,5 @@ source activate base
 conda activate causal_felix
 
 # Run program
-python run_causal_tests.py --n_trials 100 --n_samples 100 --period 0.1 --test 'joint' --n_vars 3 --cd_type 'constraint' --a 0
+python run_causal_tests.py --n_trials 100 --n_samples 300 --period 0.1 --test 'joint' --n_vars 3 --cd_type 'constraint' --a 0
 
