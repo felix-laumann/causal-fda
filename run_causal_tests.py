@@ -178,4 +178,4 @@ if __name__ == '__main__':
     pickle.dump(p_values_dict, pvalues_causal)
     pvalues_causal.close()
 
-    shutil.copytree('results', '~/results_1', dirs_exist_ok=True)
+    #shutil.copytree('results', '~/results_1', dirs_exist_ok=True)
