@@ -1,0 +1,21 @@
+#PBS -l select=1:ncpus=8:mem=64gb
+
+#PBS -lwalltime=72:0:0
+
+# Clone repository and checkout to the given tag name.
+git clone git@github.com:felix-laumann/causal-fda.git $TMPDIR/causal-fda
+
+cd $TMPDIR/causal-fda
+
+# Load modules
+module load anaconda3/personal
+
+# Input data and output configuration
+export DATA_DIR="$HOME/"
+
+
+conda activate causal_felix
+
+# Run program
+python run_causal_tests.py --n_trials 1 --n_samples 100 --period 0.1 --test 'joint' --n_vars 3 --cd_type 'constraint' --a 1
+
