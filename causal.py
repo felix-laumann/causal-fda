@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 
 from causal_ccm.causal_ccm import ccm
-from tigramite.pcmci import PCMCI
-from tigramite.independence_tests import GPDC
-import tigramite.data_processing as dp
+#from tigramite.pcmci import PCMCI
+#from tigramite.independence_tests import GPDC
+#import tigramite.data_processing as dp
 from teaspoon.parameter_selection.FNN_n import FNN_n
 from teaspoon.parameter_selection.MI_delay import MI_for_delay
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -278,20 +278,20 @@ def pcmci_graph(x_array, cond_indep_test):
 
     # prepare the data
     x_array_T = x_array.T
-    dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
+    #dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
 
     # initialise the class
-    pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
+    #pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
 
     # find the optimal lag
     x_lags = [MI_for_delay(x_array[i]) for i in range(n_nodes)]
     lag = int(np.sum(x_lags) / n_nodes)
 
     # perform the PCMCI method
-    results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
-    parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
+    #results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
+    #parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
 
-    return parents, results['p_matrix'], results['val_matrix']
+    return 0 #parents, results['p_matrix'], results['val_matrix']
 
 
 # WRAPPER FUNCTION TO CALL ALL CAUSAL DISCOVERY METHODS
@@ -343,7 +343,7 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
         lags, corr_values = 0, 0
     elif cd_type == 'PCMCI':
         # PCMCI method
-        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
+        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=0) #GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
         lags, lamb_cond, rejects_opts = 0, 0, 0
     elif cd_type == 'CCM':
         # convergent cross mapping
