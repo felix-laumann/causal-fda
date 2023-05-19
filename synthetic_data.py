@@ -30,7 +30,7 @@ def sample_points(n_samples, n_obs, upper_limit, random_state=None):
 
 
 # interpolation with splines
-def spline_single_sample(X, obs_points, pred_points, int_order, smooth_param):
+def spline_single_sample(X, obs_points, pred_points, int_order):
     """
     Given a single sample of functional data X at locations obs_points, a spline is fit and predictions are
     given at locations pred_points
@@ -39,17 +39,16 @@ def spline_single_sample(X, obs_points, pred_points, int_order, smooth_param):
     X: single function sample
     obs_points: function sample observation locations
     pred_points: prediction locations
-    smooth_param: smoothness penalty
 
     Returns:
     The predictions of a spline with smoothness parameter at locations pred_points
     """
     X_fd = FDataGrid(data_matrix=X, sample_points=obs_points)
-    X_fd.interpolation = SplineInterpolation(interpolation_order=int_order, smoothness_parameter=smooth_param)
+    X_fd.interpolation = SplineInterpolation(interpolation_order=int_order)
     return X_fd.evaluate(pred_points)
 
 
-def spline_multi_sample(X, obs_points, pred_points, int_order=5, smooth_param=0):
+def spline_multi_sample(X, obs_points, pred_points, int_order=5):
     """
     Given multiple samples of functional data X, an array of corresponding observation locations obs_points,
     splines are fit and predictions are given at locations pred_points
@@ -65,7 +64,7 @@ def spline_multi_sample(X, obs_points, pred_points, int_order=5, smooth_param=0)
     """
     X_reg = np.zeros((X.shape[0], len(pred_points)))
     for j in range(X.shape[0]):
-        X_reg[j, :] = spline_single_sample(X[j, :], obs_points[j, :], pred_points, int_order, smooth_param).squeeze()
+        X_reg[j, :] = spline_single_sample(X[j, :], obs_points[j, :], pred_points, int_order).squeeze()
     return FDataGrid(data_matrix=X_reg, sample_points=pred_points.T)
 
 
