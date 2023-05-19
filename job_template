@@ -20,5 +20,5 @@ conda activate causal_felix
 python run_causal_tests.py --n_trials 1 --n_samples 100 --period 0.1 --test 'joint' --n_vars 3 --cd_type 'constraint' --a 1
 
 # Copy required files back
-cp $TMPDIR/causal-fda/results $HOME/causal-fda/results
+cp $TMPDIR/causal-fda/results $PBS_O_WORKDIR/causal-fda/results
 
