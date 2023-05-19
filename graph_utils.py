@@ -1,5 +1,7 @@
 import numpy as np
 import networkx as nx
+import pickle
+from itertools import permutations, chain, combinations
 
 
 # UTIL FUNCTIONS TO GENERATE DAGS
@@ -9,7 +11,7 @@ def n_DAGs(n):
     according to Archer et al. (2020), Corollary 11 (https://arxiv.org/pdf/1909.01550.pdf)
 
     Inputs:
-    n: number of nodes (maximum 6)
+    n: number of nodes (maximum 5)
 
     Returns:
     a_n: total number of DAGs
@@ -24,10 +26,8 @@ def n_DAGs(n):
         a_n = 543
     elif n==5:
         a_n = 29281
-    elif n==6:
-        a_n = 3781503
     else:
-        raise ValueError('Generating DAGs with more than six nodes is not implemented due to computational reasons. '
+        raise ValueError('Generating DAGs with more than five nodes is not implemented due to computational reasons. '
                          'We recommend to partially direct your graph first.')
 
     return a_n
@@ -99,12 +99,98 @@ def conditions(n_nodes):
     return edges_conditions
 
 
-def Meek_init(sparse_graph):
+def find_unshielded_triples(adj_mat, check=True):
     """
-    Function to direct unshielded triples
+    Find the list of unshielded triples i--j--k in adjacency matrix as (i, j, k)
+    """
+    if check:
+        assert np.all(adj_mat == adj_mat.T)  # the adjacency matrix must be symmetric
+    unsh_trip = []
+
+    if np.any(adj_mat != 0):  # if at least one edge, find all unshielded triples in adj_mat
+        xy = np.transpose(np.nonzero(adj_mat))  # find (x,y) indices in adjacency matrix of edges
+        for i in range(xy.shape[0]):
+            x, y = xy[i][0], xy[i][1]
+            # return the unique values in np.nonzero(adj_mat[y, :])[0] that are not in x
+            all_z = np.setdiff1d(np.nonzero(adj_mat[y, :])[0], x)
+            for z in all_z:
+                if adj_mat[x, z] == 0 and adj_mat[z, x] == 0:
+                    unsh_trip.append([xy[i][0], xy[i][1], z])
+
+        # delete duplicates
+        if len(unsh_trip) > 0:
+            l = len(unsh_trip)
+            delete_dup = np.full(l, False)
+            for i in range(l):
+                if unsh_trip[i][0] > unsh_trip[i][2]:
+                    delete_dup[i] = True
+
+            unsh_trip = [e for i_e, e in enumerate(unsh_trip) if delete_dup[i_e] == False]
+
+    return unsh_trip
+
+
+def sort_dict_ascending(d, descending=False):
+    """
+    Sort dict (dictionary) by its value in ascending order
+    """
+    dict_list = sorted(d.items(), key=lambda x: x[1], reverse=descending)
+    return {dict_list[i][0]: dict_list[i][1] for i in range(len(dict_list))}
+
+
+def cond_set_init(sparse_graph, full_results, sepsets_results):
+    """
+    Function to direct unshielded triples based on separation sets
 
     Inputs:
     sparse_graph: graph with undirected edges in form of list of tuples where each tuple is an edge
+    full_results: the complete results with edge, rejection, p-value, full result and separation sets
+
+    Returns:
+    pd_graph_init: partially directed graph based on Phase I of the PC algorithm where unshielded triples are directed
+    """
+    pd_graph_init = {key: [] for key in list(sparse_graph.nodes())}
+    pd_graph_init_dict = {}
+    poss_orients = []  # possible orientations
+
+    adj_mat = nx.to_numpy_array(sparse_graph, nodelist=sparse_graph.nodes())
+    # find unshielded triples
+    un_triples = [(i, j, k) for (i, j, k) in find_unshielded_triples(adj_mat)]
+
+    for (x, y, z) in un_triples:
+        # find possible separation sets
+        poss_sepsets = [conds for edge, conds in sepsets_results.items() if edge == (x, z)]
+        # define possible orientations
+        if all(y not in sepset for sepset in poss_sepsets):
+            poss_orients.append((x, y, z))    # x --> y <-- z
+
+    for (x, y, z) in poss_orients:
+        p_cond = [r[2] for r in full_results if r[0] == (x, z)]
+        if p_cond:
+            pd_graph_init_dict[(x, y, z)] = max(p_cond)
+
+    pd_graph_init_sort = sort_dict_ascending(pd_graph_init_dict)
+
+    for (x, y, z) in pd_graph_init_sort.keys():
+        pd_graph_init[y].extend([x, z])
+
+    if not poss_orients:
+        for edge in sparse_graph.edges():
+            # leave edge undirected (saved as double edge)
+            pd_graph_init[edge[0]].append(edge[1])
+            pd_graph_init[edge[1]].append(edge[0])
+
+    return pd_graph_init
+
+
+def max_p_init(sparse_graph, full_results):
+    """
+    Function to direct unshielded triples based on the separating/conditional set with the highest p-value as described
+    in Ramsey, J. (2016): https://arxiv.org/abs/1610.00378#
+
+    Inputs:
+    sparse_graph: graph with undirected edges in form of list of tuples where each tuple is an edge
+    full_results: the complete results with edge, rejection, p-value and conditional set
 
     Returns:
     pd_graph_init: partially directed graph based on Phase I of the PC algorithm where unshielded triples are directed
@@ -112,60 +198,27 @@ def Meek_init(sparse_graph):
     pd_graph_init = {}
 
     # Phase I: iterate over all edges and find unshielded triples (0 - 1 - 2)
-    if len(sparse_graph) == 1:
+    if len(sparse_graph.edges) == 1:
         # leave edge undirected (saved as double edge)
-        pd_graph_init[sparse_graph[0][0]] = []
-        pd_graph_init[sparse_graph[0][0]].append(sparse_graph[0][1])
-        pd_graph_init[sparse_graph[0][1]] = []
-        pd_graph_init[sparse_graph[0][1]].append(sparse_graph[0][0])
+        pd_graph_init[list(sparse_graph.edges)[0][0]] = []
+        pd_graph_init[list(sparse_graph.edges)[0][0]].append(list(sparse_graph.edges)[0][1])
+        pd_graph_init[list(sparse_graph.edges)[0][1]] = []
+        pd_graph_init[list(sparse_graph.edges)[0][1]].append(list(sparse_graph.edges)[0][0])
 
-    for edge_i in sparse_graph:
-        for edge_j in sparse_graph:
-            if edge_i == edge_j:
-                continue
-            # form unshielded triples
-            elif edge_i[0] == edge_j[0]:
-                for edge_k in sparse_graph:
-                    if (edge_i[1], edge_j[1]) == edge_k:    # checking whether edge 0 - 2 exists
-                        continue
-                    else:
-                        # direct edges 0 -> 1 <- 2
-                        pd_graph_init[edge_j[0]] = []
-                        pd_graph_init[edge_j[0]].extend([edge_i[1], edge_j[1]])
+    for edge in sparse_graph.edges:
+        max_p = 0
+        max_sep_set = []
+        # iterate over all separating conditional sets
+        rows = [result for result in full_results if result[0] == edge]
+        for row in rows:
+            # find maximum p-value
+            if row[2] > max_p:
+                max_p = row[2]
+                max_sep_set = row[3]
 
-            elif edge_i[0] == edge_j[1]:
-                for edge_k in sparse_graph:
-                    if (edge_i[1], edge_j[0]) == edge_k:    # checking whether edge 0 - 2 exists
-                        continue
-                    else:
-                        # direct edges 0 -> 1 <- 2
-                        pd_graph_init[edge_j[1]] = []
-                        pd_graph_init[edge_j[1]].extend([edge_i[1], edge_j[0]])
-
-            elif edge_i[1] == edge_j[0]:
-                for edge_k in sparse_graph:
-                    if (edge_i[0], edge_j[1]) == edge_k:    # checking whether edge 0 - 2 exists
-                        continue
-                    else:
-                        # direct edges 0 -> 1 <- 2
-                        pd_graph_init[edge_j[0]] = []
-                        pd_graph_init[edge_j[0]].extend([edge_i[0], edge_j[1]])
-
-            elif edge_i[1] == edge_j[1]:
-                for edge_k in sparse_graph:
-                    if (edge_i[0], edge_j[0]) == edge_k:    # checking whether edge 0 - 2 exists
-                        continue
-                    else:
-                        # direct edges 0 -> 1 <- 2
-                        pd_graph_init[edge_j[1]] = []
-                        pd_graph_init[edge_j[1]].extend([edge_i[0], edge_j[0]])
-
-            else:
-                # leave edge undirected (saved as double edge)
-                pd_graph_init[edge_i[0]] = []
-                pd_graph_init[edge_i[0]].extend(edge_i[1])
-                pd_graph_init[edge_i[1]] = []
-                pd_graph_init[edge_i[1]].extend(edge_i[0])
+        # direct the edges to the separating conditional set with the highest p-value
+        for max_sep_var in max_sep_set:
+            pd_graph_init[max_sep_var] = [edge[0], edge[1]]
 
     return pd_graph_init
 
@@ -176,6 +229,24 @@ def both_edges(G, i, j):
 
 def any_edge(G, i, j):
     return G.has_edge(i, j) or G.has_edge(j, i)
+
+
+def find_triangles(adj_mat):
+    """
+    Return the list of triangles i o-o j o-o k o-o i in adj_mat as (i, j, k) [with symmetry]
+    """
+    return [(pair[0][0], pair[0][1], pair[1][1]) for pair in permutations(adj_mat, 2)
+            if pair[0][1] == pair[1][0] and pair[0][0] != pair[1][1] and (pair[0][0], pair[1][1]) in adj_mat]
+
+
+def find_kites(adj_mat):
+    """
+    Return the list of non-ambiguous kites i o-o j o-o l o-o k o-o i o-o l in adj_mat \
+    (where j and k are non-adjacent) as (i, j, k, l) [with asymmetry j < k]
+    """
+    return [(pair[0][0], pair[0][1], pair[1][1], pair[0][2]) for pair in permutations(find_triangles(adj_mat), 2)
+            if pair[0][0] == pair[1][0] and pair[0][2] == pair[1][2]
+            and pair[0][1] < pair[1][1] and adj_mat[pair[0][1], pair[1][1]] == 0]
 
 
 def Meek_rules(pd_graph_init):
@@ -192,86 +263,41 @@ def Meek_rules(pd_graph_init):
     # define a graph of initial parents and descendants where first entry in edge is parent and second is descendant
     pd_graph = nx.MultiDiGraph()
     for desc, parents in pd_graph_init.items():
-        for i in range(len(parents)):
-            pd_graph.add_edge(parents[i], desc)
+        pd_graph.add_node(desc)
+        if parents:
+            for i in range(len(parents)):
+                pd_graph.add_edge(parents[i], desc)
 
-    # Phase II
-    for (i, j) in list(combinations_tuple(range(pd_graph.number_of_nodes()), 2)):
-        # Rule 1: if k -> i and i - j and k and j are not adjacent, then i -> j
-        if both_edges(pd_graph, i, j):
-            # look at all the parents (or predecessors) of i
-            for k in pd_graph.predecessors(i):
-                # skip if there is an arrow i -> k
-                if pd_graph.has_edge(i, k):
-                    continue
-                # skip if k and j are adjacent
-                if any_edge(pd_graph, k, j):
-                    continue
-                # make i - j into i -> j
-                pd_graph.remove_edge(j, i)
-                break
+    adj_mat = nx.to_numpy_array(pd_graph, nodelist=pd_graph.nodes())
+    un_triples = find_unshielded_triples(adj_mat, check=False)
+    tris = find_triangles(adj_mat)
+    kites = find_kites(adj_mat)
 
-        # Rule 2: orient i - j into i -> j whenever there is a chain i -> k -> j, and i and j are adjacent
-        if both_edges(pd_graph, i, j):
-            # find nodes k where k is descendant (or successor) of i, i -> k
-            succs_i = set()
-            for k in pd_graph.successors(i):
-                if not pd_graph.has_edge(k, i):
-                    succs_i.add(k)
-            # find nodes k where k is parent (or predecessor) of j, k -> j
-            preds_j = set()
-            for k in pd_graph.predecessors(j):
-                if not pd_graph.has_edge(j, k):
-                    preds_j.add(k)
-            # check if there is any node k where i -> k -> j
-            if len(succs_i & preds_j) > 0:
-                # make i - j into i -> j
-                pd_graph.remove_edge(j, i)
+    loop = True
+    while loop:
+        loop = False
+        # Rule 1
+        for (i, j, k) in un_triples:
+            if (i in pd_graph.predecessors(j)) and (both_edges(pd_graph, j, k)):
+                if k in pd_graph.predecessors(j):
+                    continue
+                pd_graph.remove_edge(k, j)
+                loop = True
 
-        # Rule 3: orient i - j into i -> j whenever there are two chains i - k -> j and i - l -> j such that
-        # k and l are not adjacent
-        if both_edges(pd_graph, i, j):
-            # find nodes k where i - k
-            adj_i = set()
-            for k in pd_graph.successors(i):
-                if pd_graph.has_edge(k, i):    # finds all nodes k and l that are adjacent to i
-                    adj_i.add(k)
-            # for all the pairs of nodes in adj_i
-            for (k, l) in combinations_tuple(adj_i, 2):
-                # skip if k and l are adjacent
-                if any_edge(pd_graph, k, l):
+        # Rule 2
+        for (i, j, k) in tris:
+            if (i in pd_graph.predecessors(j)) and (j in pd_graph.predecessors(k)) and (both_edges(pd_graph, i, k)):
+                if k in pd_graph.predecessors(i):
                     continue
-                # skip if not k -> j
-                if pd_graph.has_edge(j, k) or (not pd_graph.has_edge(k, j)):
-                    continue
-                # skip if not l -> j
-                if pd_graph.has_edge(j, l) or (not pd_graph.has_edge(l, j)):
-                    continue
-                # make i - j into i -> j
-                pd_graph.remove_edge(j, i)
-                break
+                pd_graph.remove_edge(k, i)
+                loop = True
 
-        # Rule 4: orient i - j into i -> j whenever there are two chains i - k -> l and k -> l -> j
-        # such that k and j are not adjacent; the edge i - l can optionally exist
-        if both_edges(pd_graph, i, j):
-            # find nodes k where i - k
-            adj_i = set()
-            for k in pd_graph.successors(i):
-                if pd_graph.has_edge(k, i):
-                    adj_i.add(k)
-            # for all the pairs of nodes in adj_i
-            for (k, l) in combinations_tuple(adj_i, 2):
-                # skip if k and j are adjacent
-                if any_edge(pd_graph, k, j):
+        # Rule 3 and 4
+        for (i, j, k, l) in kites:
+            if (both_edges(pd_graph, i, j)) and (both_edges(pd_graph, i, k)) and (j in pd_graph.predecessors(l)) and (k in pd_graph.predecessors(l)) and (both_edges(pd_graph, i, l)):
+                if l in pd_graph.predecessors(i):
                     continue
-                # skip if not k -> l
-                if pd_graph.has_edge(l, k) or (not pd_graph.has_edge(k, l)):
-                    continue
-                # skip if not l -> j
-                if pd_graph.has_edge(j, l) or (not pd_graph.has_edge(l, j)):
-                    continue
-                # make i - j into i -> j.
-                pd_graph.remove_edge(j, i)
-                break
+                pd_graph.remove_edge(l, i)
+                loop = True
 
     return pd_graph

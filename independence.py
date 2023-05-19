@@ -2,7 +2,6 @@ import numpy as np
 from scipy.stats import percentileofscore
 from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft1, K_dft2, K_dwt
 from numba import njit
-from tqdm.notebook import tqdm
 from multiprocessing import cpu_count, get_context
 
 
@@ -162,13 +161,15 @@ def cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
     for node in range(n_nodes):
         Z[:, node * d:(node + 1) * d] = Z_arr[node]
 
-    k_Zs = [make_K(Z, reshaped_z) for z, reshaped_z in zip(Z, reshape(Z, n_nodes * d))]
+    k_Zs = [make_K(Z, reshaped_z) for reshaped_z in reshape(Z, n_nodes * d)]
 
-    with get_context('spawn').Pool(cpu_count()) as pool:
+    with get_context('spawn').Pool(4) as pool:
         jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
                 for x_CPT in reshape(X_CPT[:n_perms], d)]
 
         return np.sort([job.get() for job in jobs])
+
+    #return np.sort([cond_null_dist_perm(x_CPT, k_Y, k_Zs, W, make_K) for x_CPT in reshape(X_CPT[:n_perms], d)])
 
 
 def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest):
@@ -255,7 +256,7 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, K):
         rejects_lamb_list = np.zeros(n_pretests)
         p_values_lamb_list = np.zeros(n_pretests)
 
-        for i in tqdm(range(n_pretests)):
+        for i in range(n_pretests):
             rejects_lamb_list[i], p_values_lamb_list[i] = cond_indep_test(X, Y, Z, lamb, alpha, n_perms, n_steps,
                                                                           make_K, pretest=True)
             if np.sum(rejects_lamb_list) > 2*alpha*n_pretests:
@@ -368,7 +369,7 @@ def joint_indep_test(X_array, n_perms, alpha, make_K):
 
 # TEST POWER
 def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, alpha=0.05, K='K_ID', test='marginal',
-               lamb_opt=1e-4, n_steps=50, biased=True):
+               lamb_opt=1e-4, n_steps=50, biased=True, analyse=False):
     """
     Computes the test power by conducting multiple independence tests in parallel
     and returning the percentage of null hypothesis rejections
@@ -390,6 +391,7 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
     n_steps: number of MC iterations in the CPT (only for conditional independence test)
     biased: Boolean parameter to determine whether to compute the biased or unbiased estimator of HSIC
             (only for marginal independence test)
+    analyse: Boolean parameter to determine whether to print rejections and p-values
 
     Returns:
     power: the percentage of rejections of the null hypothesis
@@ -405,39 +407,19 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
 
     if K == 'K_ID':
         make_K = K_ID
-    elif K == 'K_dft':
-        make_K = K_dft
-    elif K == 'K_dft1':
-        make_K = K_dft1
-    elif K == 'K_dft2':
-        make_K = K_dft2
-    elif K == 'K_dct':
-        make_K = K_dct
-    elif K == 'K_dwt':
-        make_K = K_dwt
-    elif K == 'K_CEXP':
-        make_K = K_CEXP
     else:
         raise ValueError('Kernel not implemented')
 
-    for i in tqdm(range(n_trials)):
+    for i in range(n_trials):
         if test == 'marginal':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
             rejects[i], p_values[i] = marginal_indep_test(X_i, Y_i, n_perms, alpha, make_K, biased)
+
         elif test == 'conditional':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
             Z_i = Z[:, i * n_samples:(i + 1) * n_samples]
-
-            if i == 0:
-                if type(lamb_opt) == float:
-                    pass
-                elif len(lamb_opt) == 1:
-                    lamb_opt = lamb_opt[0]
-                else:
-                    raise ValueError('Lambda must be a number.')
-
             rejects[i], p_values[i] = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
                                                       make_K, pretest=False)
 
@@ -448,6 +430,9 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
 
         else:
             raise ValueError("Only independence tests of type 'marginal', 'conditional', or 'joint' are supported.")
+
+        if analyse:
+            print(rejects[i], p_values[i])
 
     # compute percentage of rejections
     power = np.mean(rejects)
