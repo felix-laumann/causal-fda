@@ -65,7 +65,6 @@ if __name__ == '__main__':
     if not os.path.exists('results/conditional'):
         os.mkdir('results/conditional')
 
-
     # marginal independence test
     if test == 'marginal':
 
@@ -119,7 +118,6 @@ if __name__ == '__main__':
         power_hist.close()
 
     # conditional independence test
-
     if test == 'conditional':
 
         # range of possible values for lambda
@@ -136,29 +134,28 @@ if __name__ == '__main__':
         print('Period T:', period)
         type_II_errors[period] = {}
         lamb_opts[period] = {}
-        for i_n, n_sample in enumerate(n_samples):
-            print('Sample size:', int(n_sample))
-            type_II_errors[period][int(n_sample)] = {}
-            lamb_opts[period][int(n_sample)] = {}
-            for i_d, d in enumerate(n_vars):
-                print('Number of conditional variables:', d)
-                type_II_errors[period][int(n_sample)][d] = []
-                lamb_opts[period][int(n_sample)][d] = []
-                for i_a, a_prime in enumerate(a_prime_list):
-                    print("a':", a_prime)
-                    # generate synthetic data
-                    X, Y, Z = generate_data(dep=test, n_samples=int(n_sample), n_trials=n_trials, n_obs=n_obs, n_preds=n_preds, period=period, n_vars=d, a=1, a_prime=a_prime, upper_limit=upper_limit, n_basis=n_basis, sd=sd)
 
-                    if i_a == 0:
-                        lamb_opt = lambs
+        print('Sample size:', int(n_samples))
+        type_II_errors[period][int(n_samples)] = {}
+        lamb_opts[period][int(n_samples)] = {}
 
-                    # conduct n trials
-                    power = test_power(X=X, Y=Y, Z=Z, n_trials=n_trials, n_perms=n_perms, alpha=alpha, K='K_ID', test=test, lamb_opt=lamb_opt)
-                    type_II_errors[period][n_sample][d].append(power)
-                    lamb_opts[period][n_sample][d].append(lamb_opt)
-                    print('Test power:', power)
-                    print('----------')
-                print('----------')
+        print('Number of conditional variables:', n_vars)
+        type_II_errors[period][int(n_samples)][n_vars] = []
+        lamb_opts[period][int(n_samples)][n_vars] = []
+        for i_a, a_prime in enumerate(a_prime_list):
+            print("a':", a_prime)
+            # generate synthetic data
+            X, Y, Z = generate_data(dep=test, n_samples=int(n_samples), n_trials=n_trials, n_obs=n_obs, n_preds=n_preds, period=period, n_vars=n_vars, a=1, a_prime=a_prime, upper_limit=upper_limit, n_basis=n_basis, sd=sd)
+
+            lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
+            lamb_opt = lamb_opts[n_vars][n_samples]
+
+            # conduct n trials
+            power = test_power(X=X, Y=Y, Z=Z, n_trials=n_trials, n_perms=n_perms, alpha=alpha, K='K_ID', test=test, lamb_opt=lamb_opt)
+            type_II_errors[period][n_samples][n_vars].append(power)
+            lamb_opts[period][n_samples][n_vars].append(lamb_opt)
+            print('Test power:', power)
+            print('----------')
         print('----------')
 
         power_hist = open('results/{}/test_power_hist_{}_{}_{}.pkl'.format(test, test, n_vars, n_samples), 'wb')

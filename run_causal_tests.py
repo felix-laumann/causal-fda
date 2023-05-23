@@ -2,7 +2,6 @@ import argparse
 import sys
 sys.path.append('..')
 import os
-import shutil
 import numpy as np
 import pickle
 from synthetic_data import generate_data
@@ -73,7 +72,6 @@ if __name__ == '__main__':
     log_sys = False
 
     linear = 0
-
 
     # saving evaluation metrics
     precisions_dict = {}
@@ -149,33 +147,31 @@ if __name__ == '__main__':
     print('Average Recall:', avg_recall)
     print('----------')
 
-    precision_causal = open('results/causal/precision_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    precision_causal = open('results/causal/precision_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(precisions_dict, precision_causal)
     precision_causal.close()
-    recall_causal = open('results/causal/recall_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    recall_causal = open('results/causal/recall_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(recalls_dict, recall_causal)
     recall_causal.close()
-    f1_causal = open('results/causal/f1_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    f1_causal = open('results/causal/f1_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(f1_scores_dict, f1_causal)
     f1_causal.close()
-    SHD_causal = open('results/causal/shd_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    SHD_causal = open('results/causal/shd_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(SHDs_dict, SHD_causal)
     SHD_causal.close()
-    GL_causal = open('results/causal/GL_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    GL_causal = open('results/causal/GL_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(GLs_dict, GL_causal)
     GL_causal.close()
-    averages_causal = open('results/causal/averages_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    averages_causal = open('results/causal/averages_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(averages_dict, averages_causal)
     averages_causal.close()
 
-    edges_causal = open('results/causal/edges_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    edges_causal = open('results/causal/edges_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(edges_dict, edges_causal)
     edges_causal.close()
-    DAGs_causal = open('results/causal/DAGs_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    DAGs_causal = open('results/causal/DAGs_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(DAGs_dict, DAGs_causal)
     DAGs_causal.close()
-    pvalues_causal = open('results/causal/p_values_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples), 'wb')
+    pvalues_causal = open('results/causal/p_values_{}_{}_{}_{}.pkl'.format(cd_type, n_vars, n_samples, a), 'wb')
     pickle.dump(p_values_dict, pvalues_causal)
     pvalues_causal.close()
-
-    #shutil.copytree('results', '~/results_1', dirs_exist_ok=True)
