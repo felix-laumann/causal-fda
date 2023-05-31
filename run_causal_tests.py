@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
     # regression parameters
     n_intervals = 12
-    analyse = False
+    analyse = True
 
     # constraint parameters
     lambs = [1e-5, 1e-4, 1e-3]

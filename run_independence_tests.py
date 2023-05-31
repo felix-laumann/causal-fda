@@ -121,7 +121,7 @@ if __name__ == '__main__':
     if test == 'conditional':
 
         # range of possible values for lambda
-        lambs = [5e-4, 7e-4, 2e-3, 5e-3, 7e-3, 1e-2, 2e-2, 3e-2, 4e-2, 5e-2, 7e-2]
+        lambs = [1e-4, 2e-4, 5e-4, 7e-4, 2e-3, 5e-3, 7e-3, 1e-2, 2e-2, 3e-2, 4e-2, 5e-2, 7e-2, 1e-1]
 
         n_pretests = 100
         n_steps = 50
@@ -151,7 +151,7 @@ if __name__ == '__main__':
             lamb_opt = lamb_opts[n_vars][n_samples]
 
             # conduct n trials
-            power = test_power(X=X, Y=Y, Z=Z, n_trials=n_trials, n_perms=n_perms, alpha=alpha, K='K_ID', test=test, lamb_opt=lamb_opt)
+            power = test_power(X=X, Y=Y, Z=Z, n_trials=n_trials, n_perms=n_perms, alpha=alpha, K='K_ID', test=test, lamb_opt=lamb_opt, analyse=True)
             type_II_errors[period][n_samples][n_vars].append(power)
             lamb_opts[period][n_samples][n_vars].append(lamb_opt)
             print('Test power:', power)
