@@ -147,8 +147,8 @@ if __name__ == '__main__':
             # generate synthetic data
             X, Y, Z = generate_data(dep=test, n_samples=int(n_samples), n_trials=n_trials, n_obs=n_obs, n_preds=n_preds, period=period, n_vars=n_vars, a=1, a_prime=a_prime, upper_limit=upper_limit, n_basis=n_basis, sd=sd)
 
-            lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
-            lamb_opt = lamb_opts[n_vars][n_samples]
+            lamb_opts_ = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
+            lamb_opt = lamb_opts_[n_vars][n_samples]
 
             # conduct n trials
             power = test_power(X=X, Y=Y, Z=Z, n_trials=n_trials, n_perms=n_perms, alpha=alpha, K='K_ID', test=test, lamb_opt=lamb_opt, analyse=True)
