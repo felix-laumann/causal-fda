@@ -1,4 +1,4 @@
-#PBS -l select=1:ncpus=12:mem=64gb
+#PBS -l select=1:ncpus=8:mem=64gb
 
 #PBS -lwalltime=72:0:0
 
@@ -14,5 +14,5 @@ source activate base
 conda activate causal_felix
 
 # Run program
-python run_independence_tests.py --n_trials 25 --n_samples 300 --period 0.1 --test 'conditional' --n_vars 8
+python run_independence_tests.py --n_trials 100 --n_samples 300 --period 0.1 --test 'conditional' --n_vars 8
 
