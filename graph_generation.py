@@ -216,7 +216,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                             # choose optimal lambda from conditional independence test experiments
                             #lamb_opts = pickle.load(open('results/conditional/lambs_opt_conditional.pkl', 'rb'))
                             lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
-                            l_cond[s-1] = lamb_opts[s][n_samples] + 0.1
+                            l_cond[s-1] = lamb_opts[s][n_samples]
 
                     if s == 0:
                         # perform marginal independence test if conditional set is empty
