@@ -5,6 +5,7 @@ import pickle
 from tqdm import tqdm
 from itertools import product, permutations
 import networkx as nx
+from multiprocessing import cpu_count, get_context
 from independence import marginal_indep_test, cond_indep_test, opt_lambda
 
 
@@ -81,7 +82,8 @@ def generate_DAGs_pd(pd_graph):
 
     # create list of undirected edges
     undirect_edges = []
-    for (i, j) in combinations_tuple(range(pdgraph.number_of_nodes()), 2):
+
+    for (i, j) in combinations_tuple(range(pdgraph.number_of_nodes()+1), 2):
         if both_edges(pdgraph, i, j):
             undirect_edges.append(tuple((i, j)))
 
@@ -198,6 +200,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
     s = -1
     while np.max(sparse_graph.degree) - 1 > s:
         s += 1
+
         for x in range(n_nodes):
             neigh_x = list(sparse_graph.neighbors(x))
             if len(neigh_x) < s - 1:
@@ -214,18 +217,26 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
 
                         else:
                             # choose optimal lambda from conditional independence test experiments
-                            #lamb_opts = pickle.load(open('results/conditional/lambs_opt_conditional.pkl', 'rb'))
-                            lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
-                            l_cond[s-1] = lamb_opts[s][n_samples]
+                            lamb_opts = pickle.load(open('results/conditional/lambs_opt_conditional.pkl', 'rb'))
+                            #lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
+                            if 0 < n_samples <= 100:
+                                n_s = 100
+                            elif 100 < n_samples <= 200:
+                                n_s = 200
+                            elif 200 < n_samples <= 300:
+                                n_s = 300
+                            else:
+                                n_s = 300
+                            l_cond[s-1] = lamb_opts[s][n_s] + 0.1
 
                     if s == 0:
                         # perform marginal independence test if conditional set is empty
-                        reject, p_value = marginal_indep_test(X_array[x], X_array[y], n_perms, alpha, make_K, biased=True)
+                        reject, p_value, _ = marginal_indep_test(X_array[x], X_array[y], n_perms, alpha, make_K, biased=True)
                     else:
                         # perform conditional independence test if conditional set is not empty
-                        reject, p_value = cond_indep_test(X_array[x], X_array[y],
-                                                          X_array[list(cond_set)].reshape(len(list(cond_set)), n_samples, n_preds),
-                                                          l_cond[s-1], alpha, n_perms, n_steps, make_K, pretest=False)
+                        reject, p_value, _ = cond_indep_test(X_array[x], X_array[y],
+                                                             X_array[list(cond_set)].reshape(len(list(cond_set)), n_samples, n_preds),
+                                                             l_cond[s-1], alpha, n_perms, n_steps, make_K, pretest=False)
                     rejects.append(reject)
                     p_values.append(p_value)
 
@@ -256,4 +267,5 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                         sepsets_results[edge].append(node)
 
     return sparse_graph, full_results, sepsets_results, lamb_cond, rejects_opts
+
 
