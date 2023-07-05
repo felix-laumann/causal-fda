@@ -91,7 +91,7 @@ def marginal_indep_test(X, Y, n_perms, alpha, make_K, biased):
     else:
         reject = 0
 
-    return reject, p_value
+    return reject, p_value, 0
 
 
 # CONDITIONAL INDEPENDENCE TEST
@@ -151,7 +151,7 @@ def cond_null_dist_perm(perm_X_CPT, k_Y, k_Zs, W, make_K):
     return np.sum([HSCIC(k_X_CPT, k_Y, k_Z, W) for k_Z in k_Zs])
 
 
-def cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
+def cond_null_dist_mp(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
     """
     Approximates the null distribution
     """
@@ -163,13 +163,11 @@ def cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
 
     k_Zs = [make_K(Z, reshaped_z) for reshaped_z in reshape(Z, n_nodes * d)]
 
-    with get_context('spawn').Pool(8) as pool:
+    with get_context('spawn').Pool(cpu_count()) as pool:
         jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
                 for x_CPT in reshape(X_CPT[:n_perms], d)]
 
         return np.sort([job.get() for job in jobs])
-
-    #return np.sort([cond_null_dist_perm(x_CPT, k_Y, k_Zs, W, make_K) for x_CPT in reshape(X_CPT[:n_perms], d)])
 
 
 def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest):
@@ -215,7 +213,7 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
             k_Z = make_K(Z, z.reshape(-1, n_nodes * n_obs))
             statistic += HSCIC(k_X, k_Y, k_Z, W)
 
-    statistics_sort = cond_null_dist(X_CPT, k_Y, Z_arr, W, make_K, n_perms)
+    statistics_sort = cond_null_dist_mp(X_CPT, k_Y, Z_arr, W, make_K, n_perms)
 
     # compute p-value
     p_value = 1 - (percentileofscore(statistics_sort, statistic)/100)
@@ -224,7 +222,7 @@ def cond_indep_test(X, Y, Z_arr, lamb, alpha, n_perms, n_steps, make_K, pretest)
     else:
         reject = 0
 
-    return reject, p_value
+    return reject, p_value, Z_arr
 
 
 def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, K):
@@ -257,8 +255,8 @@ def opt_lambda(X, Y, Z, lambs, n_pretests, n_perms, n_steps, alpha, K):
         p_values_lamb_list = np.zeros(n_pretests)
 
         for i in range(n_pretests):
-            rejects_lamb_list[i], p_values_lamb_list[i] = cond_indep_test(X, Y, Z, lamb, alpha, n_perms, n_steps,
-                                                                          make_K, pretest=True)
+            rejects_lamb_list[i], p_values_lamb_list[i], _ = cond_indep_test(X, Y, Z, lamb, alpha, n_perms, n_steps,
+                                                                             make_K, pretest=True)
             if np.sum(rejects_lamb_list) > 2*alpha*n_pretests:
                 rejects_lamb[lamb] = n_pretests
                 break
@@ -414,14 +412,14 @@ def test_power(X, Y=None, Z=None, edges_dict=None, n_trials=200, n_perms=1000, a
         if test == 'marginal':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
-            rejects[i], p_values[i] = marginal_indep_test(X_i, Y_i, n_perms, alpha, make_K, biased)
+            rejects[i], p_values[i], _ = marginal_indep_test(X_i, Y_i, n_perms, alpha, make_K, biased)
 
         elif test == 'conditional':
             X_i = X[i * n_samples:(i + 1) * n_samples]
             Y_i = Y[i * n_samples:(i + 1) * n_samples]
             Z_i = Z[:, i * n_samples:(i + 1) * n_samples]
-            rejects[i], p_values[i] = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
-                                                      make_K, pretest=False)
+            rejects[i], p_values[i], _ = cond_indep_test(X_i, Y_i, Z_i, lamb_opt, alpha, n_perms, n_steps,
+                                                         make_K, pretest=False)
 
         elif test == 'joint':
             edges_dict_i, X_i = edges_dict[i], X[i]
