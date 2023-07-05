@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
+import networkx as nx
 
 from causal_ccm.causal_ccm import ccm
-#from tigramite.pcmci import PCMCI
-#from tigramite.independence_tests import GPDC
-#import tigramite.data_processing as dp
+from tigramite.pcmci import PCMCI
+from tigramite.independence_tests import GPDC
+import tigramite.data_processing as dp
 from teaspoon.parameter_selection.FNN_n import FNN_n
 from teaspoon.parameter_selection.MI_delay import MI_for_delay
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -50,7 +51,7 @@ def PC_alg(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, analyse,
 
     pd_graph = partially_direct(sparse_graph, full_results, sepsets_results, init, analyse)
 
-    return pd_graph, lamb_cond, rejects_opts
+    return sparse_graph, pd_graph, lamb_cond, rejects_opts
 
 
 # REGRESSION-BASED CAUSAL STRUCTURE LEARNING
@@ -96,7 +97,7 @@ def RESIT(X_array, pred_points, _DAG, n_intervals, n_neighbours, n_perms, alpha,
     return reject, p_value
 
 
-def eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor, pd_graph=None):
+def eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor, pd_graph):
     """
     Evaluate all possible candidate directed acyclic graphs given the number of variables
     and (optional) a partially directed graph
@@ -129,7 +130,7 @@ def eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms
     p_values = np.zeros(len(DAGs_dict))
 
     # iterate over each candidate DAG
-    with get_context('spawn').Pool(8) as pool:
+    with get_context('spawn').Pool(cpu_count()) as pool:
         jobs = [(i, _DAG, pool.apply_async(RESIT, (X_array, pred_points, _DAG, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor)))
                 for i, _DAG in DAGs_dict.items()]
 
@@ -278,25 +279,25 @@ def pcmci_graph(x_array, cond_indep_test):
 
     # prepare the data
     x_array_T = x_array.T
-    #dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
+    dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
 
     # initialise the class
-    #pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
+    pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
 
     # find the optimal lag
     x_lags = [MI_for_delay(x_array[i]) for i in range(n_nodes)]
     lag = int(np.sum(x_lags) / n_nodes)
 
     # perform the PCMCI method
-    #results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
-    #parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
+    results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
+    parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
 
-    return 0 #parents, results['p_matrix'], results['val_matrix']
+    return parents, results['p_matrix'], results['val_matrix']
 
 
 # WRAPPER FUNCTION TO CALL ALL CAUSAL DISCOVERY METHODS
 def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, lambs, n_pretests,
-                     n_steps, analyse, regressor, l_cond, r_opts, init, find_lambda):
+                     n_steps, analyse, regressor, l_cond, r_opts, init, find_lambda, pd_graph=None):
     """
     Wrapper function to discover causal graph by constraint-based and regression-based approaches (as specified in cd_type)
 
@@ -319,6 +320,7 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
     r_opts: rejection rate with optimal lambda
     init: with which method the undirected skeleton graph shall be directed ('cond_set', 'cond_indep', 'max_p')
     find_lambda: (boolean) whether lambda values are learnt newly or taken from previous experiments
+    pd_graph: given partially directed graph
 
     Returns:
     _DAG: causal graph that is fully directed when 'regression' or 'combined' is used,
@@ -330,23 +332,26 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
 
     if cd_type == 'regression':
         # RESIT
-        _DAGs, p_values = eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor, pd_graph=None)
+        sparse_g = []
+        _DAGs, p_values = eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor, pd_graph=pd_graph)
         lamb_cond, rejects_opts, lags, corr_values = 0, 0, 0, 0
     elif cd_type == 'constraint':
         # PC algorithm
-        _DAGs, lamb_cond, rejects_opts = PC_alg(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, analyse, l_cond, r_opts, init, find_lambda)
+        sparse_g, _DAGs, lamb_cond, rejects_opts = PC_alg(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, analyse, l_cond, r_opts, init, find_lambda)
         p_values, lags, corr_values = np.nan, 0, 0
     elif cd_type == 'combined':
         # combined: first PC algorithm, then RESIT on result of PC algorithm (i.e., on Markov equivalence class)
-        pd_graph, lamb_cond, rejects_opts = PC_alg(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, analyse, l_cond, r_opts, init, find_lambda)
+        sparse_g, pd_graph, lamb_cond, rejects_opts = PC_alg(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, analyse, l_cond, r_opts, init, find_lambda)
         _DAGs, p_values = eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor, pd_graph=pd_graph)
         lags, corr_values = 0, 0
     elif cd_type == 'PCMCI':
         # PCMCI method
-        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=0) #GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
+        sparse_g = []
+        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
         lags, lamb_cond, rejects_opts = 0, 0, 0
     elif cd_type == 'CCM':
         # convergent cross mapping
+        sparse_g = []
         _DAGs = []
         p_values = []
         lags = []
@@ -358,6 +363,7 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
         lamb_cond, rejects_opts, corr_values = 0, 0, 0
     elif cd_type == 'Granger':
         # Granger-causality test
+        sparse_g = []
         _DAGs = []
         p_values = []
         corr_values = []
@@ -372,7 +378,7 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
     else:
         raise ValueError('Chosen causal structure learning method not implemented. Choose between "regression", "constraint", and "combined".')
 
-    return _DAGs, p_values, lamb_cond, rejects_opts, lags, corr_values
+    return sparse_g, _DAGs, p_values, lamb_cond, rejects_opts, lags, corr_values
 
 
 # EVALUATION METRICS
@@ -436,11 +442,28 @@ def norm_shd(true_dag, dag):
     dag: the DAG that was learnt by the causal structure learning algorithm
 
     Returns:
-    sum(diff): the sum of differences between the underlying true DAG and the learnt DAG
+    normalised SHD
     """
-    diff = np.abs(true_dag - dag)
     norm = true_dag.shape[0] * (true_dag.shape[0] - 1)
-    return np.sum(diff) / norm
+    return shd(true_dag, dag) / norm
+
+
+def shd_skeleton(true_dag, learnt_dag):
+    """
+    Computes the difference between the learnt causal skeleton and the undirected skeleton of the true DAG
+
+    Inputs:
+    true_dag: the underlying DAG that was taken to generate the data
+    dag: the DAG that was learnt by the causal structure learning algorithm
+
+    Returns:
+    SHD between causal skeletons of true and learnt DAGs
+    """
+    true_skeleton = true_dag + true_dag.T
+    learnt_skeleton = learnt_dag + learnt_dag.T
+    #dag_skeleton = nx.to_numpy_array(sparse_graph, nodelist=sparse_graph.nodes())
+    diff = np.abs(true_skeleton - learnt_skeleton)
+    return np.sum(diff)
 
 
 def global_learning(true_dag, dag):
@@ -509,6 +532,7 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
     n_vars, n_samples, n_obs = X_dict[0].shape
     pred_points = np.linspace(0, upper_limit, n_preds)
 
+    sparse_graphs = {}
     CPDAG = {}
     p_value = np.zeros(n_trials, dtype=object)
     corr_values = {}
@@ -547,10 +571,10 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
             print('-------------')
             print('True DAG:', edges_dict[i])
 
-        CPDAG[i], p_value[i], lamb_cond, rejects_opts, lags, corr_values[i] = causal_discovery(cd_type, X_dict[i], pred_points, n_intervals,
-                                                                                               n_neighbours, n_perms, alpha, make_K, lambs,
-                                                                                               n_pretests, n_steps, analyse, regressor,
-                                                                                               l_cond, r_opts, init, find_lambda)
+        sparse_graphs[i], CPDAG[i], p_value[i], lamb_cond, rejects_opts, lags, corr_values[i] = causal_discovery(cd_type, X_dict[i], pred_points, n_intervals,
+                                                                                                                 n_neighbours, n_perms, alpha, make_K, lambs,
+                                                                                                                 n_pretests, n_steps, analyse, regressor,
+                                                                                                                 l_cond, r_opts, init, find_lambda)
 
         # updating l_cond and r_opts with learnt optimal lambda values
         l_cond, r_opts = lamb_cond, rejects_opts
