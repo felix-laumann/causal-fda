@@ -227,7 +227,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                                 n_s = 300
                             else:
                                 n_s = 300
-                            l_cond[s-1] = lamb_opts[s][n_s] + 0.1
+                            l_cond[s-1] = lamb_opts[s][n_s]
 
                     if s == 0:
                         # perform marginal independence test if conditional set is empty
