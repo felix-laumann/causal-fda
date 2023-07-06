@@ -357,6 +357,7 @@ def joint_indep_test(X_array, n_perms, alpha, make_K):
     statistics_sort = joint_null_dist(K_list, n_samples, n_nodes, n_perms)
 
     p_value = 1 - (percentileofscore(statistics_sort, statistic) / 100)
+
     if p_value < alpha:
         reject = 1
     else:
