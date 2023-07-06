@@ -130,7 +130,7 @@ def eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms
     p_values = np.zeros(len(DAGs_dict))
 
     # iterate over each candidate DAG
-    with get_context('spawn').Pool(cpu_count()) as pool:
+    with get_context('spawn').Pool(8) as pool:
         jobs = [(i, _DAG, pool.apply_async(RESIT, (X_array, pred_points, _DAG, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor)))
                 for i, _DAG in DAGs_dict.items()]
 
