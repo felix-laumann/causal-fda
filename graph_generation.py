@@ -214,6 +214,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                             # find optimal lambda for conditional set of various sizes
                             l_cond[s-1], r_opts[s-1] = opt_lambda(X_array[x], X_array[y], X_array[list(cond_set)].reshape(len(list(cond_set)), n_samples, n_preds),
                                                                   lambs, n_pretests, n_perms, n_steps, alpha, K='K_ID')
+                            l_cond[s-1] = l_cond[s-1] + 0.1
 
                         else:
                             # choose optimal lambda from conditional independence test experiments
@@ -227,7 +228,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                                 n_s = 300
                             else:
                                 n_s = 300
-                            l_cond[s-1] = lamb_opts[s][n_s]
+                            l_cond[s-1] = lamb_opts[s][n_s] + 0.1
 
                     if s == 0:
                         # perform marginal independence test if conditional set is empty
@@ -241,7 +242,7 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                     p_values.append(p_value)
 
                     if analyse:
-                        print('Conditional independence test between:', x, 'and', y,
+                        print('Conditional independence test between', x, 'and', y,
                               'given', cond_set, 'with p-value:', p_value)
 
                     # save all results

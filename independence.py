@@ -163,7 +163,7 @@ def cond_null_dist_mp(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
 
     k_Zs = [make_K(Z, reshaped_z) for reshaped_z in reshape(Z, n_nodes * d)]
 
-    with get_context('spawn').Pool(8) as pool:
+    with get_context('spawn').Pool(32) as pool:
         jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
                 for x_CPT in reshape(X_CPT[:n_perms], d)]
 
