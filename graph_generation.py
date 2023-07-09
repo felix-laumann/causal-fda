@@ -209,31 +209,34 @@ def sparsify_graph(X_array, lambs, n_pretests, n_perms, n_steps, alpha, make_K, 
                 neigh_x_wo_y = [v for v in neigh_x if v != y]
 
                 for cond_set in combinations_tuple(neigh_x_wo_y, s):
-                    if l_cond[s-1] == 0:
-                        if find_lambda:
-                            # find optimal lambda for conditional set of various sizes
-                            l_cond[s-1], r_opts[s-1] = opt_lambda(X_array[x], X_array[y], X_array[list(cond_set)].reshape(len(list(cond_set)), n_samples, n_preds),
-                                                                  lambs, n_pretests, n_perms, n_steps, alpha, K='K_ID')
-                            l_cond[s-1] = l_cond[s-1] + 0.1
-
-                        else:
-                            # choose optimal lambda from conditional independence test experiments
-                            #lamb_opts = pickle.load(open('results/conditional/lambs_opt_conditional.pkl', 'rb'))
-                            lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
-                            if 0 < n_samples <= 100:
-                                n_s = 100
-                            elif 100 < n_samples <= 200:
-                                n_s = 200
-                            elif 200 < n_samples <= 300:
-                                n_s = 300
-                            else:
-                                n_s = 300
-                            l_cond[s-1] = lamb_opts[s][n_s] + 0.1
-
                     if s == 0:
                         # perform marginal independence test if conditional set is empty
                         reject, p_value, _ = marginal_indep_test(X_array[x], X_array[y], n_perms, alpha, make_K, biased=True)
                     else:
+                        if l_cond[s - 1] == 0:
+                            if find_lambda:
+                                # find optimal lambda for conditional set of various sizes
+                                l_cond[s - 1], r_opts[s - 1] = opt_lambda(X_array[x], X_array[y],
+                                                                          X_array[list(cond_set)].reshape(
+                                                                              len(list(cond_set)), n_samples, n_preds),
+                                                                          lambs, n_pretests, n_perms, n_steps, alpha,
+                                                                          K='K_ID')
+                                l_cond[s - 1] = l_cond[s - 1] + 0.1
+
+                            else:
+                                # choose optimal lambda from conditional independence test experiments
+                                # lamb_opts = pickle.load(open('results/conditional/lambs_opt_conditional.pkl', 'rb'))
+                                lamb_opts = pickle.load(open('lambs_opt_conditional.pkl', 'rb'))
+                                if 0 < n_samples <= 100:
+                                    n_s = 100
+                                elif 100 < n_samples <= 200:
+                                    n_s = 200
+                                elif 200 < n_samples <= 300:
+                                    n_s = 300
+                                else:
+                                    n_s = 300
+                                l_cond[s - 1] = lamb_opts[s][n_s]
+
                         # perform conditional independence test if conditional set is not empty
                         reject, p_value, _ = cond_indep_test(X_array[x], X_array[y],
                                                              X_array[list(cond_set)].reshape(len(list(cond_set)), n_samples, n_preds),
