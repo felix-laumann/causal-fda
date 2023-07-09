@@ -117,7 +117,7 @@ if __name__ == '__main__':
     n_perms = 1000
     alpha = 0.05
     make_K = K_ID
-    lambs = 1e-1
+    lambs = [1e-3, 1e-2, 1e-1]
     n_pretests = 100
     n_steps = 50
     analyse = True
