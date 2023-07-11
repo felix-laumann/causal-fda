@@ -14,5 +14,5 @@ source activate base
 conda activate causal_felix
 
 # Run program
-python SDG_causal_discovery.py --cd_type 'constraint' --find_Lambda True
+python SDG_causal_discovery.py --cd_type 'constraint' --find_lambda True
 
