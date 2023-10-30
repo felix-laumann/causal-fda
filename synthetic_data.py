@@ -88,19 +88,7 @@ def mean_func(t, mll1, mul1, mll2, mul2, mll3, mul3, mll4, mul4):
     return a*np.sin(b*t) + c*np.cos(d*t)
 
 
-# design matrix for historically dependent data
-def beta_old(s, t, bll1, bul1, bll2, bul2, bll3, bul3, bll4, bul4, linear):
-    if (bll1==-1) and (bul1==-1) and (bll2==-1) and (bul2==-1) and (bll3==-1)and (bul3==-1) and (bll4==-1) and (bul4==-1):
-        bll1, bul1, bll2, bul2, bll3, bul3, bll4, bul4 = 1, 2, 8, 16, 1, 2, 8, 16
-
-    a = np.random.uniform(bll1, bul1)
-    b = np.random.uniform(bll2, bul2)
-    c = np.random.uniform(bll3, bul3)
-    d = np.random.uniform(bll4, bul4)
-    return a*np.sin(b*s) + c*np.cos(d*t) + linear
-
-
-# design matrix for historically dependent data
+# design function/matrix for historically dependent data
 def beta(s, t, linear):
     c_1 = np.random.uniform(0.25, 0.75)
     c_2 = np.random.uniform(0.25, 0.75)
@@ -136,48 +124,15 @@ def hist_data(X, upper_limit, a, pred_points, linear=0):
             beta_p = beta(s, t, linear)
             y = np.zeros(len(pred_points[pred_points <= upper_limit]))
             for i_t, t in enumerate(pred_points[pred_points <= upper_limit]):  # looping over time points of y
-                #y[i_t] = trapezoid(X_arr[p, i][:i_t+1] * beta_p[:i_t+1, i_t])
                 if i_t > 0:
                     y[i_t] = np.sum(X_arr[p, i][:i_t + 1] * beta_p[:i_t + 1, i_t]) / i_t
                 else:
                     y[i_t] = np.sum(X_arr[p, i][:i_t + 1] * beta_p[:i_t + 1, i_t])
 
             sum_y += y
-            Y[i] = a*sum_y
+            Y[i] = a * sum_y
 
     return Y
-
-
-def two_log(X0, Y0, r_x, r_y, B_xy, B_yx, n_samples, n_preds):
-    """
-    Function to generate data according to a coupled two-species nonlinear logistic difference system with chaotic dynamics
-    Inputs:
-    X0: initial value for X
-    Y0: initial value for X
-    r_x: system parameter (set between 3 and 4)
-    r_y: system parameter (set between 3 and 4)
-    B_xy: effect of Y on X
-    B_yx: effect of X on Y
-
-    Returns:
-    X_fd_list
-    """
-    X_fd_list = np.empty((2, n_samples, n_preds))
-    t = n_preds * n_samples * 2
-
-    X = [X0]
-    Y = [Y0]
-    for i_t in range(t-1):
-        X_ = X[-1] * (r_x - r_x * X[-1] - B_xy * Y[-1])
-        Y_ = Y[-1] * (r_y - r_y * Y[-1] - B_yx * X[-1])
-        X.append(X_)
-        Y.append(Y_)
-
-    for n_s in range(n_samples):
-        X_fd_list[0, n_s] = np.asarray(X)[(2*n_s) * n_preds:((2*n_s) + 1) * n_preds]
-        X_fd_list[1, n_s] = np.asarray(Y)[(2*n_s) * n_preds:((2*n_s) + 1) * n_preds]
-
-    return X_fd_list
 
 
 def DAG_hist(n_nodes, n_samples, n_obs, n_preds, a, upper_limit, period, n_basis, sd, prob, linear=0):
@@ -232,7 +187,7 @@ def DAG_hist(n_nodes, n_samples, n_obs, n_preds, a, upper_limit, period, n_basis
 
 
 def generate_data(dep, n_samples, n_trials, n_obs, n_preds, period=1, n_vars=1, a=1, a_prime=1, upper_limit=1, n_basis=3, sd=1, prob=0.5,
-                  linear=0, log_sys=False, analyse=False):
+                  linear=0, analyse=False):
     """
     Parent function to generate synthetic data
 
@@ -274,7 +229,7 @@ def generate_data(dep, n_samples, n_trials, n_obs, n_preds, period=1, n_vars=1, 
                                                                                              aligned=False).squeeze()
         X = spline_multi_sample(X_mat, obs_points_X, pred_points).evaluate(pred_points).squeeze() + \
             np.random.normal(0, sd, size=(n_samples * n_trials, n_preds))
-        Y = hist_data(X, upper_limit, a_prime, pred_points, linear=linear) + \
+        Y = hist_data(X, upper_limit, a, pred_points, linear=linear) + \
             np.random.normal(0, sd, size=(n_samples * n_trials, n_preds))
 
         return X, Y
@@ -297,25 +252,10 @@ def generate_data(dep, n_samples, n_trials, n_obs, n_preds, period=1, n_vars=1, 
         edges_dict = {}
         X_dict = {}
         for trial in range(n_trials):    # generating n_trials different DAGs with data distributed accordingly
-            if not log_sys:
-                if trial == 0 and analyse:
-                    print('Generate data according to historical model')
-                edges_dict[trial], X_dict[trial] = DAG_hist(n_vars, n_samples, n_obs, n_preds, a, upper_limit, period,
-                                                            n_basis, sd, prob, linear=linear)
-
-            else:
-                if trial == 0 and analyse:
-                    print('Generate data according to two-species logistic model')
-                g = causaldag.DAG({0, 1})
-                g.add_arc(0, 1)
-                edges_dict[trial] = g
-                X0 = 0.2
-                Y0 = 0.4
-                r_x = 3.8
-                r_y = 3.5
-                B_xy = 0.02
-                B_yx = a
-                X_dict[trial] = two_log(X0, Y0, r_x, r_y, B_xy, B_yx, n_samples=n_samples, n_preds=n_preds)
+            if trial == 0 and analyse:
+                print('Generate data according to historical model')
+            edges_dict[trial], X_dict[trial] = DAG_hist(n_vars, n_samples, n_obs, n_preds, a, upper_limit, period,
+                                                        n_basis, sd, prob, linear=linear)
 
         return edges_dict, X_dict
 

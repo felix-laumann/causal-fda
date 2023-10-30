@@ -125,11 +125,11 @@ def plot_power(type_II_errors, n_samples, a_list, n_trials, test, periods, n_var
     for col1, n_sample in enumerate(n_samples):
         for col2, p in enumerate(periods):
             if test == 'conditional':
-                plt.plot(a_list, type_II_errors[n_vars][n_sample], colors[col1], marker='o', lw=3,
-                         linestyle=linestyles[col2], label=r'n = {}, $\lambda^*=$ {}'.format(int(n_sample), lamb_opts[n_vars][n_sample]))
+                plt.plot(a_list, type_II_errors[p][n_sample], colors[col1], marker='o', lw=3,
+                         linestyle=linestyles[col2], label=r'n = {}, $\lambda^*=$ {}'.format(int(n_sample), lamb_opts[p][n_sample]))
 
-                error = confidence(np.asarray(type_II_errors[n_vars][n_sample]), n_trials=n_trials)
-                plt.fill_between(a_list, type_II_errors[n_vars][n_sample] - error, type_II_errors[n_vars][n_sample] + error,
+                error = confidence(np.asarray(type_II_errors[p][n_sample]), n_trials=n_trials)
+                plt.fill_between(a_list, type_II_errors[p][n_sample] - error, type_II_errors[p][n_sample] + error,
                                  interpolate=True, alpha=0.25, color=colors[col1])
             else:
                 if col2==0:
@@ -229,130 +229,133 @@ def type_I_boxplot(df, test='conditional'):
     return plt.show()
 
 
-def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, a_list, n_nodes, T, cd_type, std=True):
+def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint', norm=True, std=True):
     """
-    Function to plot test power results
+    Function to plot SHD results on constraint-based causal discovery
 
     Inputs:
     SHD_avg_list: list of the average SHD over the number of trials
     SHD_std_list: list of the standard deviations of SHD over the number of trials
     n_samples: (array) number of samples
-    a_list: list of dependence factors a (or a' for conditional independence test)
     n_nodes: the number of nodes in the DAG
-    T: period
-    cd_type: 'regression', 'constraint', or 'combined'
-    n_trials: number of trials conducted in experiment
+    cd_type: method of causal discovery (either 'constraint' or 'combined')
+    norm: (boolean) whether to plot the normalised SHD or not
     """
-
-    colors = ['royalblue', 'seagreen', 'orangered']
-    linestyles = ['solid', 'dashed', 'dashdot']
-
     plt.figure(figsize=(12, 8))
+    colors = ['royalblue', 'seagreen', 'orangered', 'khaki']
 
-    plt.xscale('log')
-    if cd_type=='regression':
-        plt.xlabel(r"$a$", size=20)
+    if norm:
+        plt.ylim(-0.02, 0.72)
+        plt.ylabel(r'Normalised structural Hemming distance', size=20)
     else:
-        plt.xlabel(r"$a'$", size=20)
-    plt.ylabel(r'Structural Hemming distance', size=20)
+        plt.ylim(-0.02, 15.02)
+        plt.ylabel(r'Structural Hemming distance', size=20)
 
-    plt.ylim(-0.02, 0.62)
-    plt.xlim(np.min(a_list)-0.01, np.max(a_list)+1)
+    plt.xlabel(r"Sample size", size=20)
 
-    if cd_type=='regression':
-        plt.title(r'Regression-based learning of DAGs with {} nodes and $T=${}'.format(n_nodes, T), size=22, pad=10)
-    elif cd_type=='constraint':
-        plt.title(r'$d=${}'.format(n_nodes), size=22, pad=10)
-    elif cd_type=='combined':
-        plt.title(r'Combined learning of DAGs with {} nodes'.format(n_nodes), size=22, pad=10)
+    plt.xlim(np.min(n_samples) - 1, np.max(n_samples) + 1)
+
+    if cd_type == 'constraint':
+        plt.title(r'Constraint-based learning of DAGs', size=22, pad=10)
+        methods = ['Constraint']
+    elif cd_type == 'combined':
+        methods = ['Combined', 'PCMCI']
+        plt.title(r'Combined learning of DAGs', size=22, pad=10)
     else:
-        raise ValueError("Only 'regression', 'constraint', and 'combined' is accepted.")
+        raise ValueError("Only 'constraint' and 'combined' supported.")
 
-    for col, n_sample in enumerate(n_samples):
-        for ls, SHD_avg, SHD_std in zip(linestyles, SHD_avg_list, SHD_std_list):
-            if ls=='solid':
-                plt.plot(a_list, SHD_avg[n_sample].values(), colors[col], marker='o', lw=3, linestyle=ls,
-                         label='n = {}'.format(int(n_sample)))
+    for meth in methods:
+        for col, d in zip(colors, n_nodes):
+            if meth == 'Combined':
+                plt.plot(n_samples, SHD_avg_list[meth][d], col, marker='o', lw=3, linestyle='dashed',
+                         label='d = {}'.format(d))
+                if std:
+                    error = SHD_std_list[meth][d]
+                    plt.fill_between(n_samples, np.asarray(SHD_avg_list[meth][d]) - error,
+                                     np.asarray(SHD_avg_list[meth][d]) + error,
+                                     interpolate=True, alpha=0.25, color=col)
+
+            elif meth == 'Constraint':
+                plt.plot(n_samples, SHD_avg_list[d], col, marker='o', lw=3, linestyle='dashed',
+                         label='d = {}'.format(d))
+                if std:
+                    error = SHD_std_list[d]
+                    plt.fill_between(n_samples, np.asarray(SHD_avg_list[d]) - error,
+                                     np.asarray(SHD_avg_list[d]) + error,
+                                     interpolate=True, alpha=0.25, color=col)
+
             else:
-                plt.plot(a_list, SHD_avg[n_sample].values(), colors[col], marker='o', lw=3, linestyle=ls)
+                plt.plot(n_samples, SHD_avg_list[meth][d], col, marker='o', lw=3, linestyle='solid')
+                if std:
+                    error = SHD_std_list[meth][d]
+                    plt.fill_between(n_samples, np.asarray(SHD_avg_list[meth][d]) - error,
+                                     np.asarray(SHD_avg_list[meth][d]) + error,
+                                     interpolate=True, alpha=0.25, color=col)
 
-            if std:
-                error = np.asarray(list(SHD_std[n_sample].values()))
-                plt.fill_between(a_list, np.asarray(list(SHD_avg[n_sample].values())) - error,
-                                 np.asarray(list(SHD_avg[n_sample].values())) + error,
-                                 interpolate=True, alpha=0.25, color=colors[col])
-
-    legend = plt.legend(fontsize=18, framealpha=1, shadow=True)
-    legend.get_frame().set_facecolor('white')
-    plt.yticks(size=18)
-    plt.xticks(ticks=[0.1, 1, 10], size=18)
-    plt.grid(True, linestyle=':', linewidth=1)
-    plt.tight_layout()
-
-    plt.savefig('causal/SHD_{}_{}.png'.format(cd_type, n_nodes), format='png')
-    return plt.show()
-
-
-def plot_SHD_norm(SHD_avg_list, SHD_std_list, n_samples, T, cd_type, std=True):
-    """
-    Function to plot test power results
-
-    Inputs:
-    SHD_avg_list: list of the average SHD over the number of trials
-    SHD_std_list: list of the standard deviations of SHD over the number of trials
-    n_samples: (array) number of samples
-    T: period
-    cd_type: 'regression', 'constraint', or 'combined'
-    n_trials: number of trials conducted in experiment
-    """
-
-    colors = ['royalblue', 'seagreen', 'orangered']
-    linestyles = ['solid', 'dashed', 'dashdot']
-
-    n_nodes = list(SHD_avg_list.keys())
-
-    plt.figure(figsize=(12, 8))
-
-    if cd_type=='regression':
-        plt.xlabel(r"$a$", size=20)
-    else:
-        plt.xlabel(r"Sample size", size=20)
-    plt.ylabel(r'Normalised structural Hemming distance', size=20)
-
-    plt.ylim(-0.02, 1.02)
-    plt.xlim(np.min(n_samples)-5, np.max(n_samples)+5)
-
-    if cd_type=='regression':
-        plt.title(r'Regression-based learning of DAGs with {} nodes and $T=${}'.format(n_nodes, T), size=22, pad=10)
-    elif cd_type=='constraint':
-        plt.title(r'Constraint-based learning of PCDAGs with $T=${}'.format(T), size=22, pad=10)
-    elif cd_type=='combined':
-        plt.title(r'Combined learning of DAGs with {} nodes'.format(n_nodes), size=22, pad=10)
-    else:
-        raise ValueError("Only 'regression', 'constraint', and 'combined' is accepted.")
-
-    for col, n_node in enumerate(n_nodes):
-        plt.plot(n_samples, [SHD_avg_list[n_node][n_sample] for n_sample in n_samples], colors[col], marker='o', lw=3, linestyle='solid',
-                 label='d = {}'.format(int(n_node)))
-
-        if std:
-            error = np.asarray(SHD_std_list[n_node])
-            plt.fill_between(n_samples, [SHD_avg_list[n_node][n_sample] for n_sample in n_samples] - error,
-                             [SHD_avg_list[n_node][n_sample] for n_sample in n_samples] + error,
-                             interpolate=True, alpha=0.25, color=colors[col])
-
-    legend = plt.legend(fontsize=18, framealpha=1, shadow=True)
+    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=3)
     legend.get_frame().set_facecolor('white')
     plt.yticks(size=18)
     plt.xticks(ticks=n_samples, size=18)
     plt.grid(True, linestyle=':', linewidth=1)
     plt.tight_layout()
 
-    plt.savefig('results/causal/SHD_norm_{}.png'.format(cd_type), format='png')
+    if norm:
+        plt.savefig('results/causal/SHD_norm_{}.png'.format(cd_type), format='png')
+    else:
+        plt.savefig('results/causal/SHD_{}.png'.format(cd_type), format='png')
     return plt.show()
 
 
-def plot_precision_recall(avg_list, std_list, n_samples, T, cd_type, std=True, metric='precision'):
+def plot_SHD_regression(SHD_avg_list, SHD_std_list, n_samples, n_nodes, std=True):
+    """
+    Function to plot SHD results on regression-based causal discovery
+
+    Inputs:
+    SHD_avg_list: list of the average SHD over the number of trials
+    SHD_std_list: list of the standard deviations of SHD over the number of trials
+    n_samples: (array) number of samples
+    n_nodes: the number of nodes in the DAG
+    """
+    plt.figure(figsize=(12, 8))
+    colors = ['royalblue', 'seagreen', 'orangered']
+    if n_nodes == 2:
+        methods = ['Regression', 'Granger', 'CCM']
+        plt.ylim(-0.02, 1.02)
+    elif n_nodes == 3:
+        methods = ['Regression', 'PCMCI']
+        plt.ylim(-0.02, 4.02)
+    else:
+        methods = 0
+
+    plt.xlabel(r"Sample size", size=20)
+    plt.ylabel(r'Structural Hemming distance', size=20)
+
+    plt.xlim(np.min(n_samples)-1, np.max(n_samples)+1)
+
+    plt.title(r'Regression-based learning of DAGs with {} nodes'.format(n_nodes), size=22, pad=10)
+
+    for col, meth in zip(colors, methods):
+        plt.plot(n_samples, SHD_avg_list[meth], col, marker='o', lw=3, linestyle='dashed',
+                 label='{}'.format(meth))
+
+        if std:
+            error = SHD_std_list[meth]
+            plt.fill_between(n_samples, np.asarray(SHD_avg_list[meth]) - error,
+                             np.asarray(SHD_avg_list[meth]) + error,
+                             interpolate=True, alpha=0.25, color=col)
+
+    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=7)
+    legend.get_frame().set_facecolor('white')
+    plt.yticks(size=18)
+    plt.xticks(ticks=n_samples, size=18)
+    plt.grid(True, linestyle=':', linewidth=1)
+    plt.tight_layout()
+
+    plt.savefig('results/causal/SHD_regression_{}.png'.format(n_nodes), format='png')
+    return plt.show()
+
+
+def plot_precision_recall(avg_list, std_list, n_samples, cd_type, std=True, metric='precision'):
     """
     Function to plot precision and recall results
 
@@ -362,14 +365,12 @@ def plot_precision_recall(avg_list, std_list, n_samples, T, cd_type, std=True, m
     n_samples: (array) number of samples
     a_list: list of dependence factors a (or a' for conditional independence test)
     n_nodes: the number of nodes in the DAG
-    T: period
     cd_type: 'regression', 'constraint', or 'combined'
     std: whether to plot standard deviation
     metric: 'precision' or 'recall
     """
 
-    colors = ['royalblue', 'seagreen', 'orangered']
-    linestyles = ['solid', 'dashed', 'dashdot']
+    colors = ['royalblue', 'seagreen', 'orangered', 'khaki']
 
     n_nodes = list(avg_list.keys())
 
@@ -386,28 +387,28 @@ def plot_precision_recall(avg_list, std_list, n_samples, T, cd_type, std=True, m
         plt.xlabel(r"Sample size", size=20)
 
     plt.ylim(-0.02, 1.02)
-    plt.xlim(np.min(n_samples)-5, np.max(n_samples)+5)
+    plt.xlim(np.min(n_samples)-1, np.max(n_samples)+1)
 
     if cd_type=='regression':
-        plt.title(r'Regression-based learning of DAGs with {} nodes and $T=${}'.format(n_nodes, T), size=22, pad=10)
+        plt.title(r'Regression-based learning of DAGs with {} nodes'.format(n_nodes), size=22, pad=10)
     elif cd_type=='constraint':
-        plt.title(r'Constraint-based learning of PCDAGs with $T=${}'.format(T), size=22, pad=10)
+        plt.title(r'Constraint-based learning of DAGs', size=22, pad=10)
     elif cd_type=='combined':
-        plt.title(r'Combined learning of DAGs with {} nodes'.format(n_nodes), size=22, pad=10)
+        plt.title(r'Combined learning of DAGs', size=22, pad=10)
     else:
         raise ValueError("Only 'regression', 'constraint', and 'combined' is accepted.")
 
     for col, n_node in enumerate(n_nodes):
-        plt.plot(n_samples, [avg_list[n_node][n_sample] for n_sample in n_samples], colors[col], marker='o', lw=3, linestyle='solid',
+        plt.plot(n_samples, avg_list[n_node], colors[col], marker='o', lw=3, linestyle='dashed',
                  label='d = {}'.format(int(n_node)))
 
         if std:
             error = np.asarray(std_list[n_node])
-            plt.fill_between(n_samples, [avg_list[n_node][n_sample] for n_sample in n_samples] - error,
-                             [avg_list[n_node][n_sample] for n_sample in n_samples] + error,
+            plt.fill_between(n_samples, avg_list[n_node] - error,
+                             avg_list[n_node] + error,
                              interpolate=True, alpha=0.25, color=colors[col])
 
-    legend = plt.legend(fontsize=18, framealpha=1, shadow=True)
+    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=7)
     legend.get_frame().set_facecolor('white')
     plt.yticks(size=18)
     plt.xticks(ticks=n_samples, size=18)
@@ -418,3 +419,51 @@ def plot_precision_recall(avg_list, std_list, n_samples, T, cd_type, std=True, m
     return plt.show()
 
 
+def plot_comparison(comp_results, regr_results, n_samples, a_list, comp_method='Granger', std=True):
+    """
+    Function to plot results on regression-based causal discovery in comparison with Granger and CCM
+
+    Inputs:
+    comp_results: results of comparison method (Granger or CCM)
+    regr_results: results of regression-based causal discovery
+    n_samples: (array) number of samples
+    a_list: list of evaluated values for a
+    comp_method: either 'Granger' or 'CCM'
+    """
+    plt.figure(figsize=(12, 8))
+    colors = ['royalblue', 'seagreen', 'orangered']
+
+    plt.xlabel(r"a", size=20)
+    plt.ylabel(r'Percentage of correctly learnt DAGs', size=20)
+
+    plt.xlim(np.min(a_list)-0.1, np.max(a_list)+0.1)
+    plt.ylim(0.05, 1.05)
+
+    plt.title(r'Comparison of {} and regression-based causal discovery'.format(comp_method), size=22, pad=10)
+
+    for col, n in zip(colors, n_samples):
+        plt.plot(np.asarray(a_list), comp_results[n], col, marker='o', lw=3, linestyle='solid',
+                 label='{}'.format('n = {}'.format(n)))
+
+        plt.plot(np.asarray(a_list), regr_results[n], col, marker='o', lw=3, linestyle='dashed')
+
+        if std:
+            error_comp = confidence(np.asarray(comp_results[n]), n_trials=200)
+            plt.fill_between(a_list, np.asarray(comp_results[n]) - error_comp,
+                             np.asarray(comp_results[n]) + error_comp,
+                             interpolate=True, alpha=0.25, color=col)
+
+            error_regr = confidence(np.asarray(regr_results[n]), n_trials=200)
+            plt.fill_between(a_list, np.asarray(regr_results[n]) - error_regr,
+                             np.asarray(regr_results[n]) + error_regr,
+                             interpolate=True, alpha=0.25, color=col)
+
+    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=1)
+    legend.get_frame().set_facecolor('white')
+    plt.yticks(size=18)
+    plt.xticks(ticks=a_list, size=18)
+    plt.grid(True, linestyle=':', linewidth=1)
+    plt.tight_layout()
+
+    plt.savefig('results/causal/{}_regression_comparison.png'.format(comp_method), format='png')
+    return plt.show()

@@ -4,13 +4,6 @@ import pywt
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 
-def dft(x, y):
-    """
-    Manhattan distance between discrete Fourier transforms of x and y
-    """
-    return np.sum(np.abs(rfft(x) - rfft(y)))
-
-
 def dft2(x, y):
     return np.sqrt(np.sum(np.abs(rfft(x) - rfft(y))**2))
 
@@ -101,58 +94,6 @@ def K_ID(X, Y=None):
     dist_mat = pairwise_distances(X, Y, metric='euclidean')
     gamma = width(X)
     K = np.exp(-dist_mat**2/(2*gamma**2))
-    return K
-
-
-def K_dft(X, Y=None):
-    """
-    Forms the kernel matrix K using the Fourier-exponential kernel with bandwidth gamma
-    equal to the median of distances between the discrete Fourier transforms of the
-    functional samples
-
-    Inputs:
-    X, Y: (n_samples, n_obs) array of observed functional samples from the distribution of X, Y
-
-    Returns:
-    K: matrix formed from the kernel values of all pairs of samples from the two distributions
-    """
-    if Y is None:
-        Y = X
-    if len(X.shape) == 1:
-        X = np.reshape(X, [-1, 1])
-    if len(Y.shape) == 1:
-        Y = np.reshape(Y, [-1, 1])
-
-    dist_mat = pairwise_distances(X, Y, metric=dft)
-    gamma = width(X, metric=dft)
-
-    K = np.exp(-dist_mat**2/(2*gamma**2))
-    return K
-
-
-def K_dft1(X, Y=None):
-    """
-    Forms the kernel matrix K using the Fourier-exponential kernel with bandwidth gamma
-    equal to the median of distances between the discrete Fourier transforms of the
-    functional samples
-
-    Inputs:
-    X, Y: (n_samples, n_obs) array of observed functional samples from the distribution of X, Y
-
-    Returns:
-    K: matrix formed from the kernel values of all pairs of samples from the two distributions
-    """
-    if Y is None:
-        Y = X
-    if len(X.shape) == 1:
-        X = np.reshape(X, [-1, 1])
-    if len(Y.shape) == 1:
-        Y = np.reshape(Y, [-1, 1])
-
-    dist_mat = pairwise_distances(X, Y, metric=dft)
-    gamma = width(X, metric=dft)
-
-    K = np.exp(-dist_mat/(2*gamma**2))
     return K
 
 

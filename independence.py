@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.stats import percentileofscore
-from kernels import K_ID, K_CEXP, K_dct, K_dft, K_dft1, K_dft2, K_dwt
-from numba import njit
+from kernels import K_ID, K_CEXP, K_dct, K_dft2, K_dwt
 from multiprocessing import cpu_count, get_context
 
 
@@ -134,7 +133,6 @@ def generate_X_CPT_MC(n_steps, log_lik_mat, perm):
     return perm
 
 
-@njit
 def HSCIC(k_X, k_Y, k_Z, W):
     term1 = k_Z.T @ W
     term2 = W @ k_Z
@@ -163,7 +161,7 @@ def cond_null_dist_mp(X_CPT, k_Y, Z_arr, W, make_K, n_perms):
 
     k_Zs = [make_K(Z, reshaped_z) for reshaped_z in reshape(Z, n_nodes * d)]
 
-    with get_context('spawn').Pool(32) as pool:
+    with get_context('spawn').Pool(cpu_count()) as pool:
         jobs = [pool.apply_async(cond_null_dist_perm, (x_CPT, k_Y, k_Zs, W, make_K))
                 for x_CPT in reshape(X_CPT[:n_perms], d)]
 

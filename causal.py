@@ -3,16 +3,15 @@ import pandas as pd
 import networkx as nx
 
 from causal_ccm.causal_ccm import ccm
-#from tigramite.pcmci import PCMCI
-#from tigramite.independence_tests import GPDC
-#import tigramite.data_processing as dp
+from tigramite.pcmci import PCMCI
+from tigramite.independence_tests import GPDC
+import tigramite.data_processing as dp
 from teaspoon.parameter_selection.FNN_n import FNN_n
 from teaspoon.parameter_selection.MI_delay import MI_for_delay
 from statsmodels.tsa.stattools import grangercausalitytests
 
-from kernels import K_ID, K_dft, K_dft1, K_dft2, K_dct, K_dwt, K_CEXP
+from kernels import K_ID, K_dft2, K_dct, K_dwt, K_CEXP
 from graph_generation import generate_DAGs, generate_DAGs_pd, sparsify_graph, partially_direct
-from graph_utils import n_DAGs
 from regression import hist_linear, knn_regressor
 from independence import joint_indep_test
 from multiprocessing import cpu_count, get_context
@@ -130,7 +129,7 @@ def eval_candidate_DAGs(X_array, pred_points, n_intervals, n_neighbours, n_perms
     p_values = np.zeros(len(DAGs_dict))
 
     # iterate over each candidate DAG
-    with get_context('spawn').Pool(8) as pool:
+    with get_context('spawn').Pool(cpu_count()) as pool:
         jobs = [(i, _DAG, pool.apply_async(RESIT, (X_array, pred_points, _DAG, n_intervals, n_neighbours, n_perms, alpha, make_K, analyse, regressor)))
                 for i, _DAG in DAGs_dict.items()]
 
@@ -279,21 +278,20 @@ def pcmci_graph(x_array, cond_indep_test):
 
     # prepare the data
     x_array_T = x_array.T
-    #dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
+    dataframe = dp.DataFrame(x_array_T, analysis_mode='multiple')
 
     # initialise the class
-    #pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
+    pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_indep_test)
 
     # find the optimal lag
     x_lags = [MI_for_delay(x_array[i]) for i in range(n_nodes)]
     lag = int(np.sum(x_lags) / n_nodes)
 
     # perform the PCMCI method
-    #results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
-    #parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
+    results = pcmci.run_pcmci(tau_max=lag, pc_alpha=None)
+    parents = pcmci.return_parents_dict(results['graph'], results['val_matrix'])
 
-    return 0
-    #return parents, results['p_matrix'], results['val_matrix']
+    return parents, results['p_matrix'], results['val_matrix']
 
 
 # WRAPPER FUNCTION TO CALL ALL CAUSAL DISCOVERY METHODS
@@ -348,7 +346,7 @@ def causal_discovery(cd_type, X_array, pred_points, n_intervals, n_neighbours, n
     elif cd_type == 'PCMCI':
         # PCMCI method
         sparse_g = []
-        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=0) #GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
+        _DAGs, p_values, corr_values = pcmci_graph(X_array, cond_indep_test=GPDC())   # Conditional independence test based on Gaussian Process and Distance Correlation
         lags, lamb_cond, rejects_opts = 0, 0, 0
     elif cd_type == 'CCM':
         # convergent cross mapping
@@ -462,39 +460,8 @@ def shd_skeleton(true_dag, learnt_dag):
     """
     true_skeleton = true_dag + true_dag.T
     learnt_skeleton = learnt_dag + learnt_dag.T
-    #dag_skeleton = nx.to_numpy_array(sparse_graph, nodelist=sparse_graph.nodes())
     diff = np.abs(true_skeleton - learnt_skeleton)
     return np.sum(diff)
-
-
-def global_learning(true_dag, dag):
-    """
-    Compute the Global Learning (Colace et al., 2004)
-
-    Inputs:
-    true_dag: the underlying DAG that was taken to generate the data
-    dag: the DAG that was learnt by the causal structure learning algorithm
-
-    Returns:
-    the Global Learning metric (which is normalised by definition)
-    """
-    # correctly oriented ddges
-    correct_edges = 0
-    # incorrect edges (missing or wrongly oriented)
-    wrong_edges = 0
-    # number of nodes
-    n_nodes = np.shape(dag)[0]
-
-    for i in range(n_nodes - 1):
-        for j in range(i + 1, n_nodes):
-            if (not (dag[i][j] != true_dag[i][j])) and (not (dag[j][i] != true_dag[j][i])):
-
-                if dag[i][j] or dag[j][i]:
-                    correct_edges += 1
-            else:
-                wrong_edges += 1
-    dist = correct_edges / (correct_edges + wrong_edges)
-    return dist
 
 
 def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_intervals=8, n_neighbours=5, n_trials=200, n_perms=1000,
@@ -541,7 +508,6 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
     recalls = np.zeros(n_trials)
     f1_scores = np.zeros(n_trials)
     SHDs = np.zeros((n_trials, n_samples))
-    GLs = np.zeros((n_trials, n_samples))
 
     l_cond = np.zeros(n_vars - 2)
     r_opts = np.zeros(n_vars - 2)
@@ -549,10 +515,6 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
     for i in range(n_trials):
         if K == 'K_ID':
             make_K = K_ID
-        elif K == 'K_dft':
-            make_K = K_dft
-        elif K == 'K_dft1':
-            make_K = K_dft1
         elif K == 'K_dft2':
             make_K = K_dft2
         elif K == 'K_dct':
@@ -587,7 +549,6 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
 
         if cd_type == 'CCM' or cd_type == 'Granger':
             SHDs_list = []
-            GLs_list = []
             # iterate over all n_samples causal structures that were learnt with CCM or Granger causality
             for cpdag in CPDAG[i]:
                 CPDAG_adj = np.zeros((len(edges_dict[i].to_nx().nodes()), len(edges_dict[i].to_nx().nodes())))
@@ -597,10 +558,8 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
 
                 # calculate SHD
                 SHDs_list.append(shd(DAG_adj, CPDAG_adj))
-                GLs_list.append(global_learning(DAG_adj, CPDAG_adj))
 
             SHDs[i] = np.asarray(SHDs_list)
-            GLs[i] = np.asarray(GLs_list)
             if analyse:
                 print('SHD:', SHDs[i])
 
@@ -638,7 +597,6 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
 
             # calculate SHD
             SHDs[i] = shd(DAG_adj, CPDAG_adj)
-            GLs[i] = global_learning(DAG_adj, CPDAG_adj)
             if analyse:
                 print('SHD:', SHDs[i][0])
 
@@ -649,7 +607,6 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
 
             # calculate SHD
             SHDs[i] = shd(DAG_adj, CPDAG_adj)
-            GLs[i] = global_learning(DAG_adj, CPDAG_adj)
             if analyse:
                 if cd_type == 'regression':
                     print('Learned DAG:', CPDAG[i])
@@ -668,4 +625,4 @@ def causal_eval(cd_type, X_dict, edges_dict, upper_limit=1, n_preds=100, n_inter
                 print('Recall:', recalls[i])
                 print('SHD:', SHDs[i][0])
 
-    return precisions, recalls, f1_scores, SHDs, GLs, CPDAG, p_value
+    return precisions, recalls, f1_scores, SHDs, CPDAG, p_value
