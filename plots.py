@@ -246,10 +246,10 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
 
     if norm:
         plt.ylim(-0.02, 0.72)
-        plt.ylabel(r'Normalised structural Hemming distance', size=20)
+        plt.ylabel(r'Normalised structural Hamming distance', size=20)
     else:
         plt.ylim(-0.02, 15.02)
-        plt.ylabel(r'Structural Hemming distance', size=20)
+        plt.ylabel(r'Structural Hamming distance', size=20)
 
     plt.xlabel(r"Sample size", size=20)
 
@@ -259,7 +259,7 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
         plt.title(r'Constraint-based learning of DAGs', size=22, pad=10)
         methods = ['Constraint']
     elif cd_type == 'combined':
-        methods = ['Combined', 'PCMCI']
+        methods = ['Combined', 'Granger', 'PCMCI']
         plt.title(r'Combined learning of DAGs', size=22, pad=10)
     else:
         raise ValueError("Only 'constraint' and 'combined' supported.")
@@ -269,6 +269,14 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
             if meth == 'Combined':
                 plt.plot(n_samples, SHD_avg_list[meth][d], col, marker='o', lw=3, linestyle='dashed',
                          label='d = {}'.format(d))
+                if std:
+                    error = SHD_std_list[meth][d]
+                    plt.fill_between(n_samples, np.asarray(SHD_avg_list[meth][d]) - error,
+                                     np.asarray(SHD_avg_list[meth][d]) + error,
+                                     interpolate=True, alpha=0.25, color=col)
+
+            elif meth == 'Granger':
+                plt.plot(n_samples, SHD_avg_list[meth][d], col, marker='o', lw=3, linestyle='dashdot')
                 if std:
                     error = SHD_std_list[meth][d]
                     plt.fill_between(n_samples, np.asarray(SHD_avg_list[meth][d]) - error,
@@ -322,13 +330,13 @@ def plot_SHD_regression(SHD_avg_list, SHD_std_list, n_samples, n_nodes, std=True
         methods = ['Regression', 'Granger', 'CCM']
         plt.ylim(-0.02, 1.02)
     elif n_nodes == 3:
-        methods = ['Regression', 'PCMCI']
+        methods = ['Regression', 'Granger', 'PCMCI']
         plt.ylim(-0.02, 4.02)
     else:
         methods = 0
 
     plt.xlabel(r"Sample size", size=20)
-    plt.ylabel(r'Structural Hemming distance', size=20)
+    plt.ylabel(r'Structural Hamming distance', size=20)
 
     plt.xlim(np.min(n_samples)-1, np.max(n_samples)+1)
 
