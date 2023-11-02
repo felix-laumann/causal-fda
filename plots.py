@@ -242,6 +242,7 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
     norm: (boolean) whether to plot the normalised SHD or not
     """
     plt.figure(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
     colors = ['royalblue', 'seagreen', 'orangered', 'khaki']
 
     if norm:
@@ -300,7 +301,11 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
                                      np.asarray(SHD_avg_list[meth][d]) + error,
                                      interpolate=True, alpha=0.25, color=col)
 
-    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=3)
+    plt.plot([], [], ' ', lw=3, linestyle='dashed', label='Combined', c='grey')
+    plt.plot([], [], ' ', lw=3, linestyle='dashdot', label='Granger', c='grey')
+    plt.plot([], [], ' ', lw=3, linestyle='solid', label='PCMCI', c='grey')
+
+    legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=3, ncol=2)
     legend.get_frame().set_facecolor('white')
     plt.yticks(size=18)
     plt.xticks(ticks=n_samples, size=18)
@@ -450,8 +455,7 @@ def plot_comparison(comp_results, regr_results, n_samples, a_list, comp_method='
     plt.title(r'Comparison of {} and regression-based causal discovery'.format(comp_method), size=22, pad=10)
 
     for col, n in zip(colors, n_samples):
-        plt.plot(np.asarray(a_list), comp_results[n], col, marker='o', lw=3, linestyle='solid',
-                 label='{}'.format('n = {}'.format(n)))
+        plt.plot(np.asarray(a_list), comp_results[n], col, marker='o', lw=3, linestyle='solid') #, label='{}'.format('n = {}'.format(n)))
 
         plt.plot(np.asarray(a_list), regr_results[n], col, marker='o', lw=3, linestyle='dashed')
 
@@ -465,6 +469,14 @@ def plot_comparison(comp_results, regr_results, n_samples, a_list, comp_method='
             plt.fill_between(a_list, np.asarray(regr_results[n]) - error_regr,
                              np.asarray(regr_results[n]) + error_regr,
                              interpolate=True, alpha=0.25, color=col)
+
+    plt.plot([], [], ' ', lw=3, marker='o', linestyle='dashed', label='Regression', c='royalblue')
+    if comp_method == 'Granger':
+        plt.plot([], [], ' ', lw=3, marker='o', linestyle='solid', label='Granger', c='royalblue')
+    elif comp_method == 'CCM':
+        plt.plot([], [], ' ', lw=3, marker='o', linestyle='solid', label='CCM', c='royalblue')
+    else:
+        return ValueError("Choose between 'Granger' and 'CCM' ")
 
     legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=1)
     legend.get_frame().set_facecolor('white')
