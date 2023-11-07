@@ -301,9 +301,10 @@ def plot_SHD(SHD_avg_list, SHD_std_list, n_samples, n_nodes, cd_type='constraint
                                      np.asarray(SHD_avg_list[meth][d]) + error,
                                      interpolate=True, alpha=0.25, color=col)
 
-    plt.plot([], [], ' ', lw=3, linestyle='dashed', label='Combined', c='grey')
-    plt.plot([], [], ' ', lw=3, linestyle='dashdot', label='Granger', c='grey')
-    plt.plot([], [], ' ', lw=3, linestyle='solid', label='PCMCI', c='grey')
+    if cd_type == 'combined':
+        plt.plot([], [], ' ', lw=3, linestyle='dashed', label='Combined', c='grey')
+        plt.plot([], [], ' ', lw=3, linestyle='dashdot', label='Granger', c='grey')
+        plt.plot([], [], ' ', lw=3, linestyle='solid', label='PCMCI', c='grey')
 
     legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=3, ncol=2)
     legend.get_frame().set_facecolor('white')
@@ -432,56 +433,54 @@ def plot_precision_recall(avg_list, std_list, n_samples, cd_type, std=True, metr
     return plt.show()
 
 
-def plot_comparison(comp_results, regr_results, n_samples, a_list, comp_method='Granger', std=True):
+def plot_comparison(regr_results, regr_results_std, comp_results, comp_results_std, n_samples, r_list, comp_method='Granger', std=True):
     """
     Function to plot results on regression-based causal discovery in comparison with Granger and CCM
 
     Inputs:
-    comp_results: results of comparison method (Granger or CCM)
-    regr_results: results of regression-based causal discovery
+    comp_results: SHD results of comparison method (Granger or CCM)
+    regr_results: SHD results of regression-based causal discovery
     n_samples: (array) number of samples
-    a_list: list of evaluated values for a
+    r_list: list of evaluated values for r
     comp_method: either 'Granger' or 'CCM'
     """
     plt.figure(figsize=(12, 8))
     colors = ['royalblue', 'seagreen', 'orangered']
 
-    plt.xlabel(r"a", size=20)
-    plt.ylabel(r'Percentage of correctly learnt DAGs', size=20)
+    plt.xlabel(r"r", size=20)
+    plt.ylabel(r'Structural Hamming distance', size=20)
 
-    plt.xlim(np.min(a_list)-0.1, np.max(a_list)+0.1)
-    plt.ylim(0.05, 1.05)
+    plt.xlim(np.min(r_list)-0.01, np.max(r_list)+0.01)
+    plt.ylim(-0.02, 2.02)
 
     plt.title(r'Comparison of {} and regression-based causal discovery'.format(comp_method), size=22, pad=10)
 
-    for col, n in zip(colors, n_samples):
-        plt.plot(np.asarray(a_list), comp_results[n], col, marker='o', lw=3, linestyle='solid') #, label='{}'.format('n = {}'.format(n)))
+    for n in n_samples:
+        if comp_method == 'Granger':
+            col = colors[1]
+        elif comp_method == 'CCM':
+            col = colors[2]
+        else:
+            raise ValueError("Choose between 'Granger' and 'CCM'.")
 
-        plt.plot(np.asarray(a_list), regr_results[n], col, marker='o', lw=3, linestyle='dashed')
+        plt.plot(np.asarray(r_list), regr_results[n], colors[0], marker='o', lw=3, linestyle='dashed', label='Regression')
+        plt.plot(np.asarray(r_list), comp_results[n], col, marker='o', lw=3, linestyle='dashed', label='{}'.format(comp_method))
 
         if std:
-            error_comp = confidence(np.asarray(comp_results[n]), n_trials=200)
-            plt.fill_between(a_list, np.asarray(comp_results[n]) - error_comp,
+            error_regr = regr_results_std[n]
+            plt.fill_between(np.asarray(r_list), np.asarray(regr_results[n]) - error_regr,
+                             np.asarray(regr_results[n]) + error_regr,
+                             interpolate=True, alpha=0.25, color=colors[0])
+
+            error_comp = comp_results_std[n]
+            plt.fill_between(np.asarray(r_list), np.asarray(comp_results[n]) - error_comp,
                              np.asarray(comp_results[n]) + error_comp,
                              interpolate=True, alpha=0.25, color=col)
-
-            error_regr = confidence(np.asarray(regr_results[n]), n_trials=200)
-            plt.fill_between(a_list, np.asarray(regr_results[n]) - error_regr,
-                             np.asarray(regr_results[n]) + error_regr,
-                             interpolate=True, alpha=0.25, color=col)
-
-    plt.plot([], [], ' ', lw=3, marker='o', linestyle='dashed', label='Regression', c='royalblue')
-    if comp_method == 'Granger':
-        plt.plot([], [], ' ', lw=3, marker='o', linestyle='solid', label='Granger', c='royalblue')
-    elif comp_method == 'CCM':
-        plt.plot([], [], ' ', lw=3, marker='o', linestyle='solid', label='CCM', c='royalblue')
-    else:
-        return ValueError("Choose between 'Granger' and 'CCM' ")
 
     legend = plt.legend(fontsize=18, framealpha=1, shadow=True, loc=1)
     legend.get_frame().set_facecolor('white')
     plt.yticks(size=18)
-    plt.xticks(ticks=a_list, size=18)
+    plt.xticks(ticks=r_list, size=18)
     plt.grid(True, linestyle=':', linewidth=1)
     plt.tight_layout()
 
