@@ -1,12 +1,12 @@
 causal-fda
-===========
+==========
 
 Repository to "Kernel-based independence tests for causal structure learning on functional data"
 
 Paper available: https://www.mdpi.com/1099-4300/25/12/1597
 
 Citing causal-fda
-===========
+==============
 
 Please, if you find this software useful in your work, reference it citing the following paper:
 
