@@ -6,7 +6,7 @@ Paper available: https://www.mdpi.com/1099-4300/25/12/1597
 
 Please cite:
 
-.. code::
+.. code-block::
 
   @article{laumann2023kernel,
     title={Kernel-based independence tests for causal structure learning on functional data},
