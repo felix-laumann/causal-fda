@@ -1,4 +1,5 @@
-# causal-fda
+causal-fda
+===========
 
 Repository to "Kernel-based independence tests for causal structure learning on functional data"
 
